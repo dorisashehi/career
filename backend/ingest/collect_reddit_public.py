@@ -75,14 +75,17 @@ def fetch_comments(post_id):
 
             body = c["data"].get("body", "")
             created = c["data"].get("created_utc", None)
+            comment_id = c["data"].get("id", "")
             subreddit_name = c["data"].get("subreddit", "")
+            # Build proper comment link with comment ID
             comment_link = (
-                f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}/"
+                f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}/_/{comment_id}/"
             )
 
             comments_list.append({
                 "text": body,
                 "date": datetime.utcfromtimestamp(created).strftime("%Y-%m-%d") if created else "",
+                "comment_id": comment_id,
                 "comment_link": comment_link
             })
 
@@ -94,10 +97,12 @@ def fetch_comments(post_id):
 
 
 # Collect data from Reddit JSON
-def collect_reddit_data(subreddits, posts_per_sub=20, output_csv="experiences_raw.csv"):
-    """Collect posts and comments from specified subreddits and save to CSV."""
-    rows = []
-    record_id = 0
+def collect_reddit_data(
+    subreddits, posts_per_sub=20, posts_csv="posts.csv", comments_csv="comments.csv"
+):
+    """Collect posts and comments from specified subreddits and save to separate CSV files."""
+    posts_list = []
+    comments_list = []
 
     for subreddit in subreddits:
         print(f"\n🔍 Fetching posts from r/{subreddit}...")
@@ -119,56 +124,63 @@ def collect_reddit_data(subreddits, posts_per_sub=20, output_csv="experiences_ra
             full_text = f"{title}\n\n{text}"
             post_link = f"https://www.reddit.com/r/{subreddit}/comments/{post_id}/"
 
-            # Save post
-            rows.append({
-                "id": record_id,
-                "type": "post",
-                "text": full_text,
+            # Save post (normalized - no comment data)
+            posts_list.append({
                 "post_id": post_id,
+                "title": title,
+                "text": text,
+                "full_text": full_text,  # Combined for convenience
                 "source": subreddit,
                 "date": datetime.utcfromtimestamp(post["created_utc"]).strftime("%Y-%m-%d"),
-                "post_link": post_link,
-                "comment_link": ""  # No comment link for the post
+                "post_link": post_link
             })
-            record_id += 1
 
             # Fetch comments
             print(f"   💬 Fetching comments for post {post_id}...")
             comments = fetch_comments(post_id)
 
             for c in comments:
-                rows.append({
-                    "id": record_id,
-                    "type": "comment",
+                # Save comment (normalized - only comment data, post_id as foreign key)
+                comments_list.append({
+                    "comment_id": c["comment_id"],
+                    "post_id": post_id,  # Foreign key to posts table
                     "text": c["text"],
-                    "post_id": post_id,
-                    "source": subreddit,
                     "date": c["date"],
-                    "post_link": post_link,  # Link to the post
-                    "comment_link": c["comment_link"]  # Link to the comment
+                    "comment_link": c["comment_link"]
                 })
-                record_id += 1
 
             time.sleep(1)  # Gentle rate limiting
-    print("rowwww:", rows)
 
-    # Save to CSV
-    df = pd.DataFrame(rows)
-    df.to_csv(output_csv, index=False)
+    # Save posts to CSV
+    if posts_list:
+        posts_df = pd.DataFrame(posts_list)
+        posts_df.to_csv(posts_csv, index=False)
+        print(f"\n✅ Saved {len(posts_list)} posts to {posts_csv}")
+    else:
+        print("\n⚠️  No posts to save")
 
-    print(f"\n✅ Saved {len(rows)} records to {output_csv}")
+    # Save comments to CSV
+    if comments_list:
+        comments_df = pd.DataFrame(comments_list)
+        comments_df.to_csv(comments_csv, index=False)
+        print(f"✅ Saved {len(comments_list)} comments to {comments_csv}")
+    else:
+        print("⚠️  No comments to save")
+
+    print(f"\n📊 Summary: {len(posts_list)} posts, {len(comments_list)} comments")
 
 
 if __name__ == "__main__":
     SUBREDDITS = [
-        "careeradvice",
-        "jobs",
-        "interviews",
         "cscareerquestions",
+        "jobs",
+        "ExperiencedDevs",
+        "ITCareerQuestions",
     ]
 
     collect_reddit_data(
         subreddits=SUBREDDITS,
         posts_per_sub=30,  # 4 subs * 30 posts ~= 120 posts
-        output_csv="experiences_raw.csv"
+        posts_csv="posts.csv",
+        comments_csv="comments.csv"
     )
