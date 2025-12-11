@@ -6,17 +6,25 @@ import pandas as pd
 import requests
 
 # Fetch posts from Reddit's public JSON endpoint (Pushshift is down)
-def fetch_posts(subreddit, limit=20):
+def fetch_posts(subreddit, limit=20, sort="top", time_filter="all"):
     """
-    Fetch posts from Reddit using the public JSON endpoint.
-    Note: Pushshift API is no longer publicly available, so we use Reddit's JSON API.
+    Fetch high-quality posts from Reddit using the public JSON endpoint.
+
+    Args:
+        subreddit: Subreddit name
+        limit: Number of posts to fetch
+        sort: Sort method - "top", "hot", or "new" (default: "top" for quality)
+        time_filter: Time filter for "top" - "all", "year", "month", "week", "day"
+
     """
-    url = f"https://www.reddit.com/r/{subreddit}/new.json"
+    url = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     headers = {"User-Agent": "Mozilla/5.0 (compatible; CareerRAGBot/1.0)"}
 
     params = {
         "limit": min(limit, 100)  # Reddit API max is 100 per request
     }
+    if sort == "top":
+        params["t"] = time_filter  # Time filter for top posts
 
     try:
         res = requests.get(url, headers=headers, params=params, timeout=30)
@@ -35,10 +43,13 @@ def fetch_posts(subreddit, limit=20):
                     "id": post_data.get("id", ""),
                     "title": post_data.get("title", ""),
                     "selftext": post_data.get("selftext", ""),
-                    "created_utc": post_data.get("created_utc", 0)
+                    "created_utc": post_data.get("created_utc", 0),
+                    "score": post_data.get("score", 0),  # Upvotes
+                    "num_comments": post_data.get("num_comments", 0),  # Engagement
+                    "upvote_ratio": post_data.get("upvote_ratio", 0.0)  # Quality indicator
                 })
 
-        print(f"   ✅ Fetched {len(posts)} posts from r/{subreddit}")
+        print(f"   ✅ Fetched {len(posts)} posts from r/{subreddit} (sort: {sort})")
         return posts
 
     except requests.exceptions.RequestException as e:
@@ -131,27 +142,61 @@ def fetch_comments(post_id):
 
 # Collect data from Reddit JSON
 def collect_reddit_data(
-    subreddits, posts_per_sub=20, posts_csv="posts.csv", comments_csv="comments.csv"
+    subreddits,
+    posts_per_sub=20,
+    posts_csv="posts.csv",
+    comments_csv="comments.csv",
+    min_score=5,
+    min_comments=3,
+    min_text_length=100,
+    sort="top",
+    time_filter="all"
 ):
-    """Collect posts and comments from specified subreddits and save to separate CSV files."""
+    """
+    Collect high-quality posts and comments from specified subreddits.
+
+    Args:
+        subreddits: List of subreddit names
+        posts_per_sub: Number of posts to fetch per subreddit
+        posts_csv: Output file for posts
+        comments_csv: Output file for comments
+        min_score: Minimum upvotes required (default: 5)
+        min_comments: Minimum number of comments required (default: 3)
+        min_text_length: Minimum post text length in characters (default: 100)
+        sort: Sort method - "top", "hot", or "new" (default: "top")
+        time_filter: Time filter for "top" - "all", "year", "month", "week", "day"
+    """
     posts_list = []
     comments_list = []
 
     for subreddit in subreddits:
         print(f"\n🔍 Fetching posts from r/{subreddit}...")
-        posts = fetch_posts(subreddit, limit=posts_per_sub)
+        posts = fetch_posts(subreddit, limit=posts_per_sub, sort=sort, time_filter=time_filter)
 
         if not posts:
             print(f"   ⚠️  No posts found for r/{subreddit}, skipping...")
             continue
 
+        filtered_count = 0
         for post in posts:
             post_id = post["id"]
             title = post.get("title", "")
             text = post.get("selftext", "")
+            score = post.get("score", 0)
+            num_comments = post.get("num_comments", 0)
+            upvote_ratio = post.get("upvote_ratio", 0.0)
 
-            # Skip empty posts
-            if len(text.strip()) < 20:
+            # Quality filters: Skip low-quality posts
+            if len(text.strip()) < min_text_length:
+                filtered_count += 1
+                continue
+
+            if score < min_score:
+                filtered_count += 1
+                continue
+
+            if num_comments < min_comments:
+                filtered_count += 1
                 continue
 
             full_text = f"{title}\n\n{text}"
@@ -165,10 +210,13 @@ def collect_reddit_data(
                 "full_text": full_text,  # Combined for convenience
                 "source": subreddit,
                 "date": datetime.utcfromtimestamp(post["created_utc"]).strftime("%Y-%m-%d"),
-                "post_link": post_link
+                "post_link": post_link,
+                "score": score,  # Upvotes
+                "num_comments": num_comments,  # Engagement
+                "upvote_ratio": upvote_ratio  # Quality indicator
             })
 
-            # Fetch comments
+            # Fetch comments for this post
             print(f"   💬 Fetching comments for post {post_id}...")
             comments = fetch_comments(post_id)
 
@@ -183,6 +231,9 @@ def collect_reddit_data(
                 })
 
             time.sleep(1)  # Gentle rate limiting
+
+        if filtered_count > 0:
+            print(f"   📊 Filtered out {filtered_count} low-quality posts")
 
     # Save posts to CSV
     if posts_list:
@@ -213,7 +264,12 @@ if __name__ == "__main__":
 
     collect_reddit_data(
         subreddits=SUBREDDITS,
-        posts_per_sub=30,  # 4 subs * 30 posts ~= 120 posts
+        posts_per_sub=50,  # Fetch more to account for filtering
         posts_csv="posts.csv",
-        comments_csv="comments.csv"
+        comments_csv="comments.csv",
+        min_score=5,  # Minimum 5 upvotes
+        min_comments=3,  # Minimum 3 comments (engagement)
+        min_text_length=100,  # Minimum 100 characters (detailed posts)
+        sort="top",  # Get top posts for quality
+        time_filter="all"  # All-time top posts
     )
