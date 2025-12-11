@@ -60,7 +60,34 @@ def fetch_comments(post_id):
 
     try:
         res = requests.get(url, headers=headers, timeout=30)
-        json_data = res.json()
+
+        # Check response status
+        if res.status_code != 200:
+            print(f"   ⚠️  Post {post_id}: HTTP {res.status_code} - Skipping comments")
+            return []
+
+        # Check if response is empty
+        if not res.text or len(res.text.strip()) == 0:
+            print(f"   ⚠️  Post {post_id}: Empty response - Skipping comments")
+            return []
+
+        # Check if response is JSON (not HTML error page)
+        content_type = res.headers.get("Content-Type", "").lower()
+        if "application/json" not in content_type:
+            # Check if it looks like HTML (common for error pages)
+            if res.text.strip().startswith("<"):
+                msg = f"   ⚠️  Post {post_id}: Received HTML instead of JSON "
+                msg += "(post may be deleted/private)"
+                print(msg)
+                return []
+
+        # Try to parse JSON
+        try:
+            json_data = res.json()
+        except ValueError as json_error:
+            print(f"   ⚠️  Post {post_id}: Invalid JSON response - {json_error}")
+            print(f"      Response preview: {res.text[:100]}")
+            return []
 
         comments_list = []
 
@@ -91,8 +118,14 @@ def fetch_comments(post_id):
 
         return comments_list
 
-    except (requests.exceptions.RequestException, ValueError, KeyError) as e:
-        print(f"Error loading comments for {post_id}: {e}")
+    except requests.exceptions.Timeout:
+        print(f"   ⚠️  Post {post_id}: Request timeout - Skipping comments")
+        return []
+    except requests.exceptions.RequestException as e:
+        print(f"   ⚠️  Post {post_id}: Network error - {e}")
+        return []
+    except (ValueError, KeyError) as e:
+        print(f"   ⚠️  Post {post_id}: Parsing error - {e}")
         return []
 
 
