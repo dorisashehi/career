@@ -324,7 +324,7 @@ if __name__ == "__main__":
         min_comments=3,
         min_text_length=100,
         sort="top",
-        time_filter="all",
+        time_filter="year",
         max_workers=10,  # Adjust based on your needs
         max_comments=50  # Limit comments per post
     )
