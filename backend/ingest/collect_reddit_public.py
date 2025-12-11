@@ -1,5 +1,6 @@
 """Collect Reddit posts and comments from career-related subreddits (Optimized)."""
 import time
+import os
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
@@ -308,6 +309,8 @@ def collect_reddit_data(
 
 
 if __name__ == "__main__":
+    os.makedirs("data", exist_ok=True)
+
     SUBREDDITS = [
         "cscareerquestions",
         "jobs",
@@ -318,8 +321,8 @@ if __name__ == "__main__":
     collect_reddit_data(
         subreddits=SUBREDDITS,
         posts_per_sub=30,
-        posts_csv="posts.csv",
-        comments_csv="comments.csv",
+        posts_csv="../data/posts.csv",
+        comments_csv="../data/comments.csv",
         min_score=5,
         min_comments=3,
         min_text_length=100,
