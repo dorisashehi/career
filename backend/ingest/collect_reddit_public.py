@@ -64,8 +64,14 @@ def fetch_posts(subreddit, limit=20, sort="top", time_filter="all"):
 
 
 # Fetch comments using Reddit's public JSON endpoint
-def fetch_comments(post_id):
-    """Fetch comments for a given Reddit post ID."""
+def fetch_comments(post_id, max_comments=20):
+    """
+    Fetch comments for a given Reddit post ID.
+
+    Args:
+        post_id: Reddit post ID
+        max_comments: Maximum number of comments to fetch (default: 20)
+    """
     url = f"https://www.reddit.com/comments/{post_id}.json"
     headers = {"User-Agent": "Mozilla/5.0 (compatible; CareerRAGBot/1.0)"}
 
@@ -111,6 +117,10 @@ def fetch_comments(post_id):
             if c["kind"] != "t1":
                 continue
 
+            # Limit to max_comments
+            if len(comments_list) >= max_comments:
+                break
+
             body = c["data"].get("body", "")
             created = c["data"].get("created_utc", None)
             comment_id = c["data"].get("id", "")
@@ -150,7 +160,8 @@ def collect_reddit_data(
     min_comments=3,
     min_text_length=100,
     sort="top",
-    time_filter="all"
+    time_filter="all",
+    max_comments_per_post=20
 ):
     """
     Collect high-quality posts and comments from specified subreddits.
@@ -165,6 +176,7 @@ def collect_reddit_data(
         min_text_length: Minimum post text length in characters (default: 100)
         sort: Sort method - "top", "hot", or "new" (default: "top")
         time_filter: Time filter for "top" - "all", "year", "month", "week", "day"
+        max_comments_per_post: Maximum number of comments to fetch per post (default: 20)
     """
     posts_list = []
     comments_list = []
@@ -218,7 +230,7 @@ def collect_reddit_data(
 
             # Fetch comments for this post
             print(f"   💬 Fetching comments for post {post_id}...")
-            comments = fetch_comments(post_id)
+            comments = fetch_comments(post_id, max_comments=max_comments_per_post)
 
             for c in comments:
                 # Save comment (normalized - only comment data, post_id as foreign key)
@@ -264,12 +276,13 @@ if __name__ == "__main__":
 
     collect_reddit_data(
         subreddits=SUBREDDITS,
-        posts_per_sub=50,  # Fetch more to account for filtering
+        posts_per_sub=30,  # Fetch more to account for filtering
         posts_csv="posts.csv",
         comments_csv="comments.csv",
         min_score=5,  # Minimum 5 upvotes
         min_comments=3,  # Minimum 3 comments (engagement)
         min_text_length=100,  # Minimum 100 characters (detailed posts)
         sort="top",  # Get top posts for quality
-        time_filter="all"  # All-time top posts
+        time_filter="year",  # Past year top posts
+        max_comments_per_post=20  # Maximum 20 comments per post
     )
