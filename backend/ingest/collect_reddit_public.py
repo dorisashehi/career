@@ -1,11 +1,43 @@
-"""Collect Reddit posts and comments from career-related subreddits."""
+"""Collect Reddit posts and comments from career-related subreddits (Optimized)."""
 import time
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-# Fetch posts from Reddit's public JSON endpoint (Pushshift is down)
+
+def create_session():
+    """Create a requests session with connection pooling and retry logic."""
+    session = requests.Session()
+
+    # Configure retry strategy
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+
+    adapter = HTTPAdapter(
+        max_retries=retry_strategy,
+        pool_connections=10,
+        pool_maxsize=20
+    )
+
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; CareerRAGBot/1.0)"})
+
+    return session
+
+
+# Global session for reuse
+SESSION = create_session()
+
+
 def fetch_posts(subreddit, limit=20, sort="top", time_filter="all"):
     """
     Fetch high-quality posts from Reddit using the public JSON endpoint.
@@ -15,27 +47,25 @@ def fetch_posts(subreddit, limit=20, sort="top", time_filter="all"):
         limit: Number of posts to fetch
         sort: Sort method - "top", "hot", or "new" (default: "top" for quality)
         time_filter: Time filter for "top" - "all", "year", "month", "week", "day"
-
     """
     url = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; CareerRAGBot/1.0)"}
 
     params = {
         "limit": min(limit, 100)  # Reddit API max is 100 per request
     }
     if sort == "top":
-        params["t"] = time_filter  # Time filter for top posts
+        params["t"] = time_filter
 
     try:
-        res = requests.get(url, headers=headers, params=params, timeout=30)
-        res.raise_for_status()  # Raise an exception for bad status codes
+        res = SESSION.get(url, params=params, timeout=30)
+        res.raise_for_status()
 
         json_data = res.json()
         posts = []
 
         if "data" in json_data and "children" in json_data["data"]:
             for child in json_data["data"]["children"]:
-                if child["kind"] != "t3":  # t3 is a link/post
+                if child["kind"] != "t3":
                     continue
 
                 post_data = child["data"]
@@ -44,9 +74,10 @@ def fetch_posts(subreddit, limit=20, sort="top", time_filter="all"):
                     "title": post_data.get("title", ""),
                     "selftext": post_data.get("selftext", ""),
                     "created_utc": post_data.get("created_utc", 0),
-                    "score": post_data.get("score", 0),  # Upvotes
-                    "num_comments": post_data.get("num_comments", 0),  # Engagement
-                    "upvote_ratio": post_data.get("upvote_ratio", 0.0)  # Quality indicator
+                    "score": post_data.get("score", 0),
+                    "num_comments": post_data.get("num_comments", 0),
+                    "upvote_ratio": post_data.get("upvote_ratio", 0.0),
+                    "subreddit": subreddit
                 })
 
         print(f"   ✅ Fetched {len(posts)} posts from r/{subreddit} (sort: {sort})")
@@ -54,56 +85,39 @@ def fetch_posts(subreddit, limit=20, sort="top", time_filter="all"):
 
     except requests.exceptions.RequestException as e:
         print(f"   ❌ Error fetching posts from r/{subreddit}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"   Response status: {e.response.status_code}")
-            print(f"   Response body: {e.response.text[:200]}")
         return []
     except (ValueError, KeyError) as e:
         print(f"   ❌ Unexpected error parsing response from r/{subreddit}: {e}")
         return []
 
 
-# Fetch comments using Reddit's public JSON endpoint
-def fetch_comments(post_id, max_comments=20):
-    """
-    Fetch comments for a given Reddit post ID.
+def fetch_comments(post_id, subreddit, max_comments=50):
+    """Fetch comments for a given Reddit post ID.
 
     Args:
         post_id: Reddit post ID
-        max_comments: Maximum number of comments to fetch (default: 20)
+        subreddit: Subreddit name
+        max_comments: Maximum number of comments to fetch (default: 50)
     """
     url = f"https://www.reddit.com/comments/{post_id}.json"
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; CareerRAGBot/1.0)"}
 
     try:
-        res = requests.get(url, headers=headers, timeout=30)
+        res = SESSION.get(url, timeout=30)
 
-        # Check response status
         if res.status_code != 200:
-            print(f"   ⚠️  Post {post_id}: HTTP {res.status_code} - Skipping comments")
             return []
 
-        # Check if response is empty
         if not res.text or len(res.text.strip()) == 0:
-            print(f"   ⚠️  Post {post_id}: Empty response - Skipping comments")
             return []
 
-        # Check if response is JSON (not HTML error page)
         content_type = res.headers.get("Content-Type", "").lower()
         if "application/json" not in content_type:
-            # Check if it looks like HTML (common for error pages)
             if res.text.strip().startswith("<"):
-                msg = f"   ⚠️  Post {post_id}: Received HTML instead of JSON "
-                msg += "(post may be deleted/private)"
-                print(msg)
                 return []
 
-        # Try to parse JSON
         try:
             json_data = res.json()
-        except ValueError as json_error:
-            print(f"   ⚠️  Post {post_id}: Invalid JSON response - {json_error}")
-            print(f"      Response preview: {res.text[:100]}")
+        except ValueError:
             return []
 
         comments_list = []
@@ -113,44 +127,81 @@ def fetch_comments(post_id, max_comments=20):
 
         comments = json_data[1]["data"]["children"]
 
-        for c in comments:
+        for c in comments[:max_comments]:  # Limit to max_comments
             if c["kind"] != "t1":
                 continue
-
-            # Limit to max_comments
-            if len(comments_list) >= max_comments:
-                break
 
             body = c["data"].get("body", "")
             created = c["data"].get("created_utc", None)
             comment_id = c["data"].get("id", "")
-            subreddit_name = c["data"].get("subreddit", "")
-            # Build proper comment link with comment ID
             comment_link = (
-                f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}/_/{comment_id}/"
+                f"https://www.reddit.com/r/{subreddit}/comments/{post_id}/_/{comment_id}/"
             )
 
             comments_list.append({
                 "text": body,
                 "date": datetime.utcfromtimestamp(created).strftime("%Y-%m-%d") if created else "",
                 "comment_id": comment_id,
-                "comment_link": comment_link
+                "comment_link": comment_link,
+                "post_id": post_id
             })
 
         return comments_list
 
-    except requests.exceptions.Timeout:
-        print(f"   ⚠️  Post {post_id}: Request timeout - Skipping comments")
+    except (requests.exceptions.Timeout, requests.exceptions.RequestException):
         return []
-    except requests.exceptions.RequestException as e:
-        print(f"   ⚠️  Post {post_id}: Network error - {e}")
-        return []
-    except (ValueError, KeyError) as e:
-        print(f"   ⚠️  Post {post_id}: Parsing error - {e}")
+    except (ValueError, KeyError):
         return []
 
 
-# Collect data from Reddit JSON
+def process_post(post, min_score, min_comments, min_text_length, max_comments=50):
+    """Process a single post and fetch its comments.
+
+    Args:
+        post: Post data dictionary
+        min_score: Minimum score filter
+        min_comments: Minimum comments filter
+        min_text_length: Minimum text length filter
+        max_comments: Maximum comments to fetch per post (default: 50)
+    """
+    post_id = post["id"]
+    title = post.get("title", "")
+    text = post.get("selftext", "")
+    score = post.get("score", 0)
+    num_comments = post.get("num_comments", 0)
+    upvote_ratio = post.get("upvote_ratio", 0.0)
+    subreddit = post.get("subreddit", "")
+
+    # Quality filters
+    if len(text.strip()) < min_text_length:
+        return None, []
+    if score < min_score:
+        return None, []
+    if num_comments < min_comments:
+        return None, []
+
+    full_text = f"{title}\n\n{text}"
+    post_link = f"https://www.reddit.com/r/{subreddit}/comments/{post_id}/"
+
+    post_data = {
+        "post_id": post_id,
+        "title": title,
+        "text": text,
+        "full_text": full_text,
+        "source": subreddit,
+        "date": datetime.utcfromtimestamp(post["created_utc"]).strftime("%Y-%m-%d"),
+        "post_link": post_link,
+        "score": score,
+        "num_comments": num_comments,
+        "upvote_ratio": upvote_ratio
+    }
+
+    # Fetch comments
+    comments = fetch_comments(post_id, subreddit, max_comments)
+
+    return post_data, comments
+
+
 def collect_reddit_data(
     subreddits,
     posts_per_sub=20,
@@ -161,10 +212,11 @@ def collect_reddit_data(
     min_text_length=100,
     sort="top",
     time_filter="all",
-    max_comments_per_post=20
+    max_workers=10,
+    max_comments=50
 ):
     """
-    Collect high-quality posts and comments from specified subreddits.
+    Collect high-quality posts and comments from specified subreddits (parallel version).
 
     Args:
         subreddits: List of subreddit names
@@ -176,11 +228,14 @@ def collect_reddit_data(
         min_text_length: Minimum post text length in characters (default: 100)
         sort: Sort method - "top", "hot", or "new" (default: "top")
         time_filter: Time filter for "top" - "all", "year", "month", "week", "day"
-        max_comments_per_post: Maximum number of comments to fetch per post (default: 20)
+        max_workers: Maximum number of parallel workers (default: 10)
+        max_comments: Maximum comments to fetch per post (default: 50)
     """
     posts_list = []
     comments_list = []
 
+    # Step 1: Fetch all posts from all subreddits (can be parallelized if needed)
+    all_posts = []
     for subreddit in subreddits:
         print(f"\n🔍 Fetching posts from r/{subreddit}...")
         posts = fetch_posts(subreddit, limit=posts_per_sub, sort=sort, time_filter=time_filter)
@@ -189,63 +244,49 @@ def collect_reddit_data(
             print(f"   ⚠️  No posts found for r/{subreddit}, skipping...")
             continue
 
-        filtered_count = 0
-        for post in posts:
-            post_id = post["id"]
-            title = post.get("title", "")
-            text = post.get("selftext", "")
-            score = post.get("score", 0)
-            num_comments = post.get("num_comments", 0)
-            upvote_ratio = post.get("upvote_ratio", 0.0)
+        all_posts.extend(posts)
 
-            # Quality filters: Skip low-quality posts
-            if len(text.strip()) < min_text_length:
-                filtered_count += 1
-                continue
+    if not all_posts:
+        print("\n⚠️  No posts found from any subreddit")
+        return
 
-            if score < min_score:
-                filtered_count += 1
-                continue
+    print(f"\n💬 Processing {len(all_posts)} posts in parallel with {max_workers} workers...")
 
-            if num_comments < min_comments:
-                filtered_count += 1
-                continue
+    # Step 2: Process all posts in parallel (filter + fetch comments)
+    filtered_count = 0
 
-            full_text = f"{title}\n\n{text}"
-            post_link = f"https://www.reddit.com/r/{subreddit}/comments/{post_id}/"
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_post = {
+            executor.submit(
+                process_post,
+                post,
+                min_score,
+                min_comments,
+                min_text_length,
+                max_comments
+            ): post for post in all_posts
+        }
 
-            # Save post (normalized - no comment data)
-            posts_list.append({
-                "post_id": post_id,
-                "title": title,
-                "text": text,
-                "full_text": full_text,  # Combined for convenience
-                "source": subreddit,
-                "date": datetime.utcfromtimestamp(post["created_utc"]).strftime("%Y-%m-%d"),
-                "post_link": post_link,
-                "score": score,  # Upvotes
-                "num_comments": num_comments,  # Engagement
-                "upvote_ratio": upvote_ratio  # Quality indicator
-            })
+        # Process completed tasks
+        for future in as_completed(future_to_post):
+            try:
+                post_data, comments = future.result()
 
-            # Fetch comments for this post
-            print(f"   💬 Fetching comments for post {post_id}...")
-            comments = fetch_comments(post_id, max_comments=max_comments_per_post)
+                if post_data is None:
+                    filtered_count += 1
+                    continue
 
-            for c in comments:
-                # Save comment (normalized - only comment data, post_id as foreign key)
-                comments_list.append({
-                    "comment_id": c["comment_id"],
-                    "post_id": post_id,  # Foreign key to posts table
-                    "text": c["text"],
-                    "date": c["date"],
-                    "comment_link": c["comment_link"]
-                })
+                posts_list.append(post_data)
+                comments_list.extend(comments)
 
-            time.sleep(1)  # Gentle rate limiting
+                print(f"   ✓ Processed post {post_data['post_id']} ({len(comments)} comments)")
 
-        if filtered_count > 0:
-            print(f"   📊 Filtered out {filtered_count} low-quality posts")
+            except Exception as e:
+                print(f"   ❌ Error processing post: {e}")
+
+    if filtered_count > 0:
+        print(f"\n📊 Filtered out {filtered_count} low-quality posts")
 
     # Save posts to CSV
     if posts_list:
@@ -276,13 +317,14 @@ if __name__ == "__main__":
 
     collect_reddit_data(
         subreddits=SUBREDDITS,
-        posts_per_sub=30,  # Fetch more to account for filtering
+        posts_per_sub=30,
         posts_csv="posts.csv",
         comments_csv="comments.csv",
-        min_score=5,  # Minimum 5 upvotes
-        min_comments=3,  # Minimum 3 comments (engagement)
-        min_text_length=100,  # Minimum 100 characters (detailed posts)
-        sort="top",  # Get top posts for quality
-        time_filter="year",  # Past year top posts
-        max_comments_per_post=20  # Maximum 20 comments per post
+        min_score=5,
+        min_comments=3,
+        min_text_length=100,
+        sort="top",
+        time_filter="all",
+        max_workers=10,  # Adjust based on your needs
+        max_comments=50  # Limit comments per post
     )
