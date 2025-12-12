@@ -3,3 +3,5 @@ PROJECT_FORMULATION.md
 myenv/
 /backend/ingest/experiences_raw.csv
 /backend/data/
+/backend/.env
+V1.md
