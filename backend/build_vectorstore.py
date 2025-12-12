@@ -60,8 +60,9 @@ def combine_posts_with_comments(max_comments_per_post=10):
                 posts_with_comments += 1
                 content_parts.append("\n\nComments and Responses:")
 
-                for i, (_, comment) in enumerate(post_comments.iterrows(), 1):
-                    content_parts.append(f"\n[Comment {i}]: {comment['text']}")
+                for _, comment in post_comments.iterrows():
+                    # Add comment text naturally without numbering
+                    content_parts.append(f"\n{comment['text']}")
 
         # Combine all parts
         full_content = "".join(content_parts)

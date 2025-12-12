@@ -32,12 +32,14 @@ qa_system_prompt = (
 
     If the context doesn't contain relevant information, say so honestly and provide general guidance if possible.
 
+    IMPORTANT: When citing information from the context, do NOT reference comment numbers or IDs. Instead, naturally incorporate the advice and experiences into your response. For example, say "Many people suggest..." or "One common piece of advice is..." rather than "Comment X says...".
+
     Context from Reddit discussions:
     {context}
 
     Question: {input}
 
-    Answer (be conversational, practical, and cite specific experiences when relevant):"""
+    Answer (be conversational, practical, and naturally incorporate experiences without referencing comment numbers):"""
 )
 qa_prompt = ChatPromptTemplate.from_messages(
     [
