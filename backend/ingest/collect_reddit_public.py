@@ -320,7 +320,7 @@ if __name__ == "__main__":
 
     collect_reddit_data(
         subreddits=SUBREDDITS,
-        posts_per_sub=30,
+        posts_per_sub=50,
         posts_csv="../data/posts.csv",
         comments_csv="../data/comments.csv",
         min_score=5,
