@@ -5,3 +5,4 @@ myenv/
 /backend/data/
 /backend/.env
 V1.md
+__pycache__
