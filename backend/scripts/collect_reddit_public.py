@@ -321,8 +321,8 @@ if __name__ == "__main__":
     collect_reddit_data(
         subreddits=SUBREDDITS,
         posts_per_sub=50,
-        posts_csv="../data/posts.csv",
-        comments_csv="../data/comments.csv",
+        posts_csv="../data/raw/posts.csv",
+        comments_csv="../data/raw/comments.csv",
         min_score=5,
         min_comments=3,
         min_text_length=100,

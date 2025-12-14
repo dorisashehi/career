@@ -3,17 +3,18 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
 
 load_dotenv()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-persistent_directory = os.path.join(current_dir, "data", "faiss_index")
-posts_csv = os.path.join(current_dir, "data", "posts_cleaned.csv")
-comments_csv = os.path.join(current_dir, "data", "comments_cleaned.csv")
+parent_dir = os.path.dirname(current_dir)  # go one level up
 
+persistent_directory = os.path.join(parent_dir, "data", "faiss_index")
+posts_csv = os.path.join(parent_dir, "data", "processed", "posts_cleaned.csv")
+comments_csv = os.path.join(parent_dir, "data", "processed", "comments_cleaned.csv")
 
 def combine_posts_with_comments(max_comments_per_post=10):
     """

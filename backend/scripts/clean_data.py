@@ -214,10 +214,10 @@ def clean_comments(input_csv, output_csv, min_text_length=20):
 
 
 def clean_reddit_data(
-    posts_input="data/posts.csv",
-    comments_input="data/comments.csv",
-    posts_output="data/posts_cleaned.csv",
-    comments_output="data/comments_cleaned.csv",
+    posts_input="data/raw/posts.csv",
+    comments_input="data/raw/comments.csv",
+    posts_output="data/processed/posts_cleaned.csv",
+    comments_output="data/processed/comments_cleaned.csv",
     min_post_length=10,
     min_comment_length=20
 ):
@@ -268,10 +268,10 @@ def clean_reddit_data(
 if __name__ == "__main__":
     # Clean the data
     clean_reddit_data(
-        posts_input="../data/posts.csv",
-        comments_input="../data/comments.csv",
-        posts_output="../data/posts_cleaned.csv",
-        comments_output="../data/comments_cleaned.csv",
+        posts_input="../data/raw/posts.csv",
+        comments_input="../data/raw/comments.csv",
+        posts_output="../data/processed/posts_cleaned.csv",
+        comments_output="../data/processed/comments_cleaned.csv",
         min_post_length=10,      # Minimum 10 chars for posts
         min_comment_length=20    # Minimum 20 chars for comments
     )

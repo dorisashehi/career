@@ -5,9 +5,9 @@ from typing import List
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 
 # --------------------------------------------------
@@ -16,14 +16,19 @@ from langchain_groq import ChatGroq
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FAISS_DIR = os.path.join(BASE_DIR, "data", "faiss_index")
-
+# Go up 2 levels from services/ to backend/, then into data/faiss_index
+BACKEND_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+FAISS_DIR = os.path.join(BACKEND_DIR, "data", "faiss_index")
 
 # --------------------------------------------------
 # INITIALIZATION FUNCTIONS
 # --------------------------------------------------
 def load_embeddings():
-    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
 
 
 def load_retriever(embeddings, k: int = 5):

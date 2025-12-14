@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from rag_service import build_rag_chain, ask_question
+from services.rag_service import build_rag_chain, ask_question
 from pydantic import BaseModel
 from typing import List, Optional
 
