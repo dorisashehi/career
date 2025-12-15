@@ -6,4 +6,6 @@ myenv/
 /backend/.env
 V1.md
 __pycache__
-chatbot-ui-design
+DATABASE_ARCHITECTURE.md
+REMAINING_TASKS.md
+WHAT_IS_LEFT.md
