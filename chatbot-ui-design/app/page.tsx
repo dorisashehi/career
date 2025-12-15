@@ -43,6 +43,10 @@ export default function CareerCoachChatbot() {
   const isSpeakingActiveRef = useRef<boolean>(false);
   const previousMessageCountRef = useRef<number>(1);
   const { toast } = useToast();
+  const lastSpokenMessageIdRef = useRef<string | null>(null);
+  const isCancellingRef = useRef(false);
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const MAX_SPEECH_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -204,6 +208,11 @@ export default function CareerCoachChatbot() {
       setIsSpeaking(false);
       isSpeakingActiveRef.current = false;
       speechSynthesisRef.current = null;
+      // Clear timeout when done
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
       return;
     }
 
@@ -222,6 +231,11 @@ export default function CareerCoachChatbot() {
         setIsSpeaking(false);
         isSpeakingActiveRef.current = false;
         speechSynthesisRef.current = null;
+        // Clear timeout when done
+        if (speechTimeoutRef.current) {
+          clearTimeout(speechTimeoutRef.current);
+          speechTimeoutRef.current = null;
+        }
       }
     };
 
@@ -236,6 +250,11 @@ export default function CareerCoachChatbot() {
         setIsSpeaking(false);
         isSpeakingActiveRef.current = false;
         speechSynthesisRef.current = null;
+        // Clear timeout when done
+        if (speechTimeoutRef.current) {
+          clearTimeout(speechTimeoutRef.current);
+          speechTimeoutRef.current = null;
+        }
       }
     };
 
@@ -243,52 +262,53 @@ export default function CareerCoachChatbot() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Function to speak text using text-to-speech
+  // Function to speak text using text-to-speech with timeout and chunking
   const speakText = (text: string) => {
-    // Stop any current speech first
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (!("speechSynthesis" in window)) return;
+
+    // HARD STOP everything
+    window.speechSynthesis.cancel();
+    isCancellingRef.current = false;
+
+    // Clear any existing timeout
+    if (speechTimeoutRef.current) {
+      clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = null;
     }
 
-    // Check if browser supports speech synthesis
-    if (!("speechSynthesis" in window)) {
-      console.warn("Text-to-speech not supported in this browser");
-      return;
-    }
+    // Split text into chunks (max 200 characters per chunk to avoid browser limits)
+    const chunkSize = 200;
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    const chunks: string[] = [];
+    let currentChunk = "";
 
-    // Wait a bit to ensure previous speech is fully cancelled
-    setTimeout(() => {
-      // Check if speech synthesis is still available
-      if (!window.speechSynthesis) return;
-
-      // Split text into smaller chunks to avoid browser cutoff
-      // Use sentence boundaries for more natural speech
-      const maxLength = 150; // Reduced from 200 for better reliability
-      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-      let currentChunk = "";
-      const chunks: string[] = [];
-
-      for (const sentence of sentences) {
-        if ((currentChunk + sentence).length <= maxLength) {
-          currentChunk += sentence;
-        } else {
-          if (currentChunk) chunks.push(currentChunk.trim());
-          currentChunk = sentence;
-        }
-      }
-      if (currentChunk) chunks.push(currentChunk.trim());
-
-      // If text is short enough, speak it directly
-      if (chunks.length <= 1 && text.length <= maxLength) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        setupUtterance(utterance, true);
-        speechSynthesisRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
+    for (const sentence of sentences) {
+      if ((currentChunk + sentence).length <= chunkSize) {
+        currentChunk += sentence;
       } else {
-        // Speak chunks one by one with improved handling
-        speakChunks(chunks, 0);
+        if (currentChunk) chunks.push(currentChunk.trim());
+        currentChunk = sentence;
       }
-    }, 100);
+    }
+    if (currentChunk) chunks.push(currentChunk.trim());
+
+    // If no chunks, use the original text
+    if (chunks.length === 0) {
+      chunks.push(text);
+    }
+
+    // Set a maximum duration timeout
+    speechTimeoutRef.current = setTimeout(() => {
+      stopSpeaking();
+      toast({
+        title: "Speech Timeout",
+        description: "Speech stopped after maximum duration.",
+        variant: "default",
+      });
+    }, MAX_SPEECH_DURATION);
+
+    // Speak chunks sequentially
+    speakChunks(chunks, 0);
   };
 
   // Stop speaking
@@ -299,33 +319,69 @@ export default function CareerCoachChatbot() {
     setIsSpeaking(false);
     isSpeakingActiveRef.current = false;
     speechSynthesisRef.current = null;
+    // Clear timeout when stopping
+    if (speechTimeoutRef.current) {
+      clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = null;
+    }
   };
 
   // Auto-speak when coach messages arrive
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
 
-    // Only speak if it's a coach message and not the initial welcome message
-    if (lastMessage?.role === "coach" && lastMessage.id !== "1") {
-      // Check if we're not already speaking
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        speakText(lastMessage.content);
-      }
+    if (
+      lastMessage?.role === "coach" &&
+      lastMessage.id !== "1" &&
+      lastSpokenMessageIdRef.current !== lastMessage.id
+    ) {
+      stopSpeaking(); // ensure clean start
+      lastSpokenMessageIdRef.current = lastMessage.id;
+      speakText(lastMessage.content);
     }
-
-    // Note: No cleanup function here to prevent interrupting speech on scroll
   }, [messages]);
 
-  // Cleanup effect that only runs on component unmount
+  // Cleanup effect that stops speech on page reload/unload
   useEffect(() => {
-    return () => {
-      // Stop speaking only when component unmounts
+    const stopSpeech = () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
+      setIsSpeaking(false);
+      isSpeakingActiveRef.current = false;
+      speechSynthesisRef.current = null;
+      // Clear timeout
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
+    };
+
+    // Stop speech on page reload/unload
+    window.addEventListener("beforeunload", stopSpeech);
+    window.addEventListener("unload", stopSpeech);
+    window.addEventListener("pagehide", stopSpeech);
+
+    // Stop speech when page becomes hidden (e.g., tab switch)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopSpeech();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", stopSpeech);
+      window.removeEventListener("unload", stopSpeech);
+      window.removeEventListener("pagehide", stopSpeech);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Also stop on component unmount
+      stopSpeech();
     };
   }, []);
 
+  // Removed scroll listener that was stopping speech on manual scroll
+  // Speech will now continue even when user scrolls the chat messages
   // Convert our messages to the format the API expects
   // The API uses "assistant" but we use "coach" in the UI
   const convertMessagesToApiFormat = (msgs: Message[]): ApiChatMessage[] => {
