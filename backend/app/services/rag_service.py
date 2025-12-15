@@ -106,13 +106,11 @@ def ask_question(
     # Extract source documents from the result
     sources = []
     if "context" in result:
-        # Get unique sources by URL to avoid duplicates
         seen_urls = set()
         for doc in result["context"]:
             metadata = doc.metadata if hasattr(doc, 'metadata') else {}
             url = metadata.get('url', '')
 
-            # Only add if we haven't seen this URL before
             if url and url not in seen_urls:
                 seen_urls.add(url)
                 source_info = {

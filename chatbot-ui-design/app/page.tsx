@@ -828,7 +828,7 @@ export default function CareerCoachChatbot() {
                                       <div className="flex items-center gap-2 flex-wrap">
                                         {source.source && (
                                           <span className="text-xs font-medium text-foreground">
-                                            r/{source.source}
+                                            reddit.com/r/{source.source}
                                           </span>
                                         )}
                                         {source.date && (
