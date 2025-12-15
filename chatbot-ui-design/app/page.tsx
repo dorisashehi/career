@@ -63,52 +63,53 @@ export default function CareerCoachChatbot() {
       recognition.interimResults = true;
       recognition.lang = "en-US";
 
+      // When we get speech results (what the user said)
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interimTranscript = "";
-        let finalTranscript = "";
+        let temporaryText = ""; // Text that might change as user speaks
+        let finalText = ""; // Text that's confirmed (user finished saying it)
 
+        // Go through all the speech results
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
+          const text = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += transcript + " ";
+            // This is the final, confirmed text
+            finalText += text + " ";
           } else {
-            interimTranscript += transcript;
+            // This is temporary text that might change
+            temporaryText += text;
           }
         }
 
-        if (finalTranscript) {
-          const trimmedFinal = finalTranscript.trim();
-          finalTranscriptRef.current = trimmedFinal;
-          setTranscript(trimmedFinal);
+        // If we have final text, save it
+        if (finalText) {
+          const cleanedText = finalText.trim();
+          finalTranscriptRef.current = cleanedText; // Save for later
+          setTranscript(cleanedText); // Show it on screen
         } else {
-          setTranscript(interimTranscript);
+          // Otherwise show the temporary text
+          setTranscript(temporaryText);
         }
       };
 
+      // When there's an error with speech recognition
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error("Speech recognition error:", event.error);
-        setIsRecording(false);
-        setTranscript("");
+        setIsRecording(false); // Stop recording
+        setTranscript(""); // Clear any text
 
-        let errorMessage = "Speech recognition error occurred";
-        switch (event.error) {
-          case "no-speech":
-            errorMessage = "No speech detected. Please try again.";
-            break;
-          case "audio-capture":
-            errorMessage = "No microphone found. Please check your microphone.";
-            break;
-          case "not-allowed":
-            errorMessage =
-              "Microphone permission denied. Please allow microphone access.";
-            break;
-          case "network":
-            errorMessage = "Network error. Please check your connection.";
-            break;
-          default:
-            errorMessage = `Speech recognition error: ${event.error}`;
+        // Figure out what went wrong and show a helpful message
+        let errorMessage = "Something went wrong with speech recognition.";
+        if (event.error === "no-speech") {
+          errorMessage = "No speech detected. Please try again.";
+        } else if (event.error === "audio-capture") {
+          errorMessage = "No microphone found. Please check your microphone.";
+        } else if (event.error === "not-allowed") {
+          errorMessage =
+            "Microphone permission denied. Please allow microphone access.";
+        } else if (event.error === "network") {
+          errorMessage = "Network error. Please check your connection.";
         }
 
+        // Show the error to the user
         toast({
           title: "Recording Error",
           description: errorMessage,
@@ -116,19 +117,21 @@ export default function CareerCoachChatbot() {
         });
       };
 
+      // When recording stops
       recognition.onend = () => {
-        setIsRecording(false);
-        // If we have a final transcript, send it to the API
+        setIsRecording(false); // Mark that we're no longer recording
+
+        // If we got some text, send it to the API
         const finalText = finalTranscriptRef.current.trim();
         if (finalText && handleSendQuestionRef.current) {
-          // Use setTimeout to ensure state updates are processed
+          // Wait a tiny bit, then send the question to get an answer
           setTimeout(() => {
             handleSendQuestionRef.current?.(finalText);
-            finalTranscriptRef.current = "";
-            setTranscript("");
+            finalTranscriptRef.current = ""; // Clear it
+            setTranscript(""); // Clear it from screen
           }, 100);
         } else {
-          setTranscript("");
+          setTranscript(""); // Clear any text
         }
       };
 
@@ -164,24 +167,28 @@ export default function CareerCoachChatbot() {
     }
   }, [messages]);
 
-  // Convert frontend messages to API format
+  // Convert our messages to the format the API expects
+  // The API uses "assistant" but we use "coach" in the UI
   const convertMessagesToApiFormat = (msgs: Message[]): ApiChatMessage[] => {
-    // Skip the initial welcome message
-    return msgs
-      .filter((msg) => msg.id !== "1")
-      .map((msg) => ({
-        role: msg.role === "coach" ? "assistant" : "user",
-        content: msg.content,
-      }));
+    // Skip the first welcome message (it has id "1")
+    const messagesToSend = msgs.filter((msg) => msg.id !== "1");
+
+    // Convert "coach" to "assistant" for the API
+    return messagesToSend.map((msg) => ({
+      role: msg.role === "coach" ? "assistant" : "user",
+      content: msg.content,
+    }));
   };
 
-  // Handle sending a question to the API
+  // This function sends a question to the backend and shows the response
   const handleSendQuestion = async (question: string) => {
+    // Don't send empty questions
     if (!question.trim()) return;
 
+    // Stop the coach from "speaking" animation
     setIsSpeaking(false);
 
-    // Add user message to chat
+    // Create a message object for the user's question
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -192,20 +199,23 @@ export default function CareerCoachChatbot() {
       }),
     };
 
+    // Add the user's message to the chat
     setMessages((prev) => [...prev, userMessage]);
+
+    // Show that we're waiting for a response
     setIsTyping(true);
 
     try {
-      // Convert chat history to API format
-      const chatHistory = convertMessagesToApiFormat([
-        ...messages,
-        userMessage,
-      ]);
+      // Get all previous messages (including the one we just added)
+      const allMessages = [...messages, userMessage];
 
-      // Call the API
+      // Convert them to the format the API wants
+      const chatHistory = convertMessagesToApiFormat(allMessages);
+
+      // Call the API to get an answer
       const answer = await askQuestion(question.trim(), chatHistory);
 
-      // Add coach response
+      // Create a message object for the coach's response
       const coachMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
@@ -216,31 +226,29 @@ export default function CareerCoachChatbot() {
         }),
       };
 
+      // Stop showing the typing indicator
       setIsTyping(false);
+
+      // Add the coach's response to the chat
       setMessages((prev) => [...prev, coachMessage]);
     } catch (error) {
+      // If something went wrong, stop the typing indicator
       setIsTyping(false);
-      console.error("Error calling API:", error);
-      console.error("Error type:", typeof error);
-      console.error("Error details:", JSON.stringify(error, null, 2));
 
-      let errorMessage = "Failed to get response from the server";
-
+      // Get the error message
+      let errorMessage = "Something went wrong. Please try again.";
       if (error instanceof Error) {
         errorMessage = error.message;
-      } else if (error && typeof error === "object" && "message" in error) {
-        errorMessage = String((error as any).message);
-      } else {
-        errorMessage = `Unexpected error: ${String(error)}`;
       }
 
+      // Show the error to the user
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
       });
 
-      // Optionally add an error message to the chat
+      // Also add an error message in the chat
       const errorChatMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
@@ -274,7 +282,9 @@ export default function CareerCoachChatbot() {
     }
   };
 
+  // Handle the record button click
   const handleStartRecording = () => {
+    // Check if speech recognition is supported
     if (!isSpeechSupported) {
       toast({
         title: "Not Supported",
@@ -287,16 +297,17 @@ export default function CareerCoachChatbot() {
 
     if (!isRecording) {
       // Start recording
-      setIsSpeaking(false);
-      setTranscript("");
-      setIsRecording(true);
+      setIsSpeaking(false); // Stop the coach animation
+      setTranscript(""); // Clear any old text
+      setIsRecording(true); // Mark that we're recording
 
       try {
+        // Start the speech recognition
         if (recognitionRef.current) {
           recognitionRef.current.start();
         }
       } catch (error) {
-        console.error("Error starting recognition:", error);
+        // If starting failed, stop recording and show an error
         setIsRecording(false);
         toast({
           title: "Recording Error",
