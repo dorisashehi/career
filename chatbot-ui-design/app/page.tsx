@@ -6,8 +6,24 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Home, Search, Briefcase, Menu, Send, Mic, MicOff } from "lucide-react";
-import { askQuestion, type ChatMessage as ApiChatMessage } from "@/lib/api";
+import {
+  Home,
+  Search,
+  Briefcase,
+  Menu,
+  Send,
+  Mic,
+  MicOff,
+  ExternalLink,
+  Calendar,
+  ThumbsUp,
+  MessageSquare,
+} from "lucide-react";
+import {
+  askQuestion,
+  type ChatMessage as ApiChatMessage,
+  type Source,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type Message = {
@@ -15,6 +31,7 @@ type Message = {
   role: "user" | "coach";
   content: string;
   timestamp: string;
+  sources?: Source[];
 };
 
 export default function CareerCoachChatbot() {
@@ -427,18 +444,19 @@ export default function CareerCoachChatbot() {
       // Convert them to the format the API wants
       const chatHistory = convertMessagesToApiFormat(allMessages);
 
-      // Call the API to get an answer
-      const answer = await askQuestion(question.trim(), chatHistory);
+      // Call the API to get an answer and sources
+      const response = await askQuestion(question.trim(), chatHistory);
 
       // Create a message object for the coach's response
       const coachMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
-        content: answer,
+        content: response.answer,
         timestamp: new Date().toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
         }),
+        sources: response.sources || [],
       };
 
       // Stop showing the typing indicator
@@ -760,6 +778,92 @@ export default function CareerCoachChatbot() {
                       <p className="text-sm leading-relaxed">
                         {message.content}
                       </p>
+                      {message.role === "coach" &&
+                        message.sources &&
+                        message.sources.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border/50">
+                            <p className="text-xs font-semibold text-foreground mb-3">
+                              Sources:
+                            </p>
+                            <div className="space-y-2">
+                              {message.sources.map((source, idx) => {
+                                // Format upvotes (e.g., 8290 -> 8.3k)
+                                const formatUpvotes = (
+                                  score: number | undefined
+                                ) => {
+                                  if (!score) return null;
+                                  if (score >= 1000) {
+                                    return `${(score / 1000).toFixed(1)}k`;
+                                  }
+                                  return score.toString();
+                                };
+
+                                // Format date (e.g., 2025-05-01 -> May 1, 2025)
+                                const formatDate = (
+                                  dateStr: string | undefined
+                                ) => {
+                                  if (!dateStr) return null;
+                                  try {
+                                    const date = new Date(dateStr);
+                                    return date.toLocaleDateString("en-US", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    });
+                                  } catch {
+                                    return dateStr;
+                                  }
+                                };
+
+                                return (
+                                  <a
+                                    key={idx}
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/30 transition-colors group"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {source.source && (
+                                          <span className="text-xs font-medium text-foreground">
+                                            r/{source.source}
+                                          </span>
+                                        )}
+                                        {source.date && (
+                                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                            <Calendar className="w-3 h-3" />
+                                            <span>
+                                              {formatDate(source.date)}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {source.score && (
+                                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                            <ThumbsUp className="w-3 h-3" />
+                                            <span>
+                                              {formatUpvotes(source.score)}{" "}
+                                              upvotes
+                                            </span>
+                                          </div>
+                                        )}
+                                        {source.num_comments && (
+                                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                            <MessageSquare className="w-3 h-3" />
+                                            <span>
+                                              {source.num_comments} comments
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                     </div>
                     <span className="text-xs text-muted-foreground mt-1 px-2">
                       {message.timestamp}

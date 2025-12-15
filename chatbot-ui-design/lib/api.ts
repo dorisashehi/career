@@ -10,15 +10,25 @@ export interface AskRequest {
   chat_history?: ChatMessage[];
 }
 
+export interface Source {
+  url: string;
+  post_id?: string;
+  source?: string;
+  date?: string;
+  score?: number;
+  num_comments?: number;
+}
+
 export interface AskResponse {
   answer: string;
+  sources: Source[];
 }
 
 // This function sends a question to the backend and gets an answer back
 export async function askQuestion(
   question: string,
   chatHistory: ChatMessage[] = []
-): Promise<string> {
+): Promise<AskResponse> {
   try {
     const requestData: AskRequest = {
       question: question,
@@ -39,9 +49,9 @@ export async function askQuestion(
       );
     }
 
-    // Get the answer from the response
+    // Get the answer and sources from the response
     const data: AskResponse = await response.json();
-    return data.answer;
+    return data;
   } catch (error) {
     if (error instanceof Error) {
       // Handle network errors (can't connect to backend)

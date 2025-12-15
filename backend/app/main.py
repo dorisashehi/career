@@ -34,8 +34,18 @@ class AskRequest(BaseModel):
     chat_history: Optional[List[ChatMessage]] = []
 
 
+class Source(BaseModel):
+    url: str
+    post_id: Optional[str] = None
+    source: Optional[str] = None
+    date: Optional[str] = None
+    score: Optional[int] = None
+    num_comments: Optional[int] = None
+
+
 class AskResponse(BaseModel):
     answer: str
+    sources: List[Source] = []
 
 # ---------------------------
 # Helpers
@@ -55,9 +65,13 @@ def ask(payload: AskRequest):
 
     chat_history = parse_chat_history(payload.chat_history)
 
-    answer, _ = ask_question(
+    answer, _, sources = ask_question(
         rag_chain = rag_chain,
         question = payload.question,
         chat_history = chat_history
     )
-    return {"answer": answer}
+
+    # Convert sources to Source models
+    source_models = [Source(**source) for source in sources]
+
+    return {"answer": answer, "sources": source_models}

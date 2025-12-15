@@ -1,6 +1,6 @@
 import os
-from dotenv import load_dotenv
 from typing import List
+from dotenv import load_dotenv
 
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
@@ -103,7 +103,29 @@ def ask_question(
 
     answer = result["answer"]
 
+    # Extract source documents from the result
+    sources = []
+    if "context" in result:
+        # Get unique sources by URL to avoid duplicates
+        seen_urls = set()
+        for doc in result["context"]:
+            metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+            url = metadata.get('url', '')
+
+            # Only add if we haven't seen this URL before
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                source_info = {
+                    "url": url,
+                    "post_id": metadata.get('post_id', ''),
+                    "source": metadata.get('source', ''),
+                    "date": metadata.get('date', ''),
+                    "score": metadata.get('score', 0),
+                    "num_comments": metadata.get('num_comments', 0),
+                }
+                sources.append(source_info)
+
     chat_history.append(HumanMessage(content=question))
     chat_history.append(AIMessage(content=answer))
 
-    return answer, chat_history
+    return answer, chat_history, sources
