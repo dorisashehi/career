@@ -40,15 +40,26 @@ export default function CareerCoachChatbot() {
     ((question: string) => Promise<void>) | null
   >(null);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const isSpeakingActiveRef = useRef<boolean>(false);
+  const previousMessageCountRef = useRef<number>(1);
   const { toast } = useToast();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Auto-scroll effect - only when message count changes (new message added)
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Only scroll if a new message was actually added
+    if (messages.length > previousMessageCountRef.current) {
+      const timeoutId = setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+
+      previousMessageCountRef.current = messages.length;
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages.length]); // Only depend on length, not the whole array
 
   // Initialize speech recognition on mount
   useEffect(() => {
@@ -167,11 +178,13 @@ export default function CareerCoachChatbot() {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
+      isSpeakingActiveRef.current = true;
     };
 
     utterance.onend = () => {
       if (isLastChunk) {
         setIsSpeaking(false);
+        isSpeakingActiveRef.current = false;
         speechSynthesisRef.current = null;
       }
     };
@@ -179,6 +192,7 @@ export default function CareerCoachChatbot() {
     utterance.onerror = (event) => {
       console.error("Speech synthesis error:", event);
       setIsSpeaking(false);
+      isSpeakingActiveRef.current = false;
       speechSynthesisRef.current = null;
     };
   };
@@ -188,6 +202,7 @@ export default function CareerCoachChatbot() {
     if (index >= chunks.length) {
       // All chunks done
       setIsSpeaking(false);
+      isSpeakingActiveRef.current = false;
       speechSynthesisRef.current = null;
       return;
     }
@@ -197,9 +212,30 @@ export default function CareerCoachChatbot() {
     setupUtterance(utterance, isLastChunk);
 
     utterance.onend = () => {
-      // Speak next chunk
+      // Speak next chunk immediately after the previous one finishes
       if (!isLastChunk) {
-        speakChunks(chunks, index + 1);
+        // Use a small delay to ensure the previous utterance is fully cleared
+        setTimeout(() => {
+          speakChunks(chunks, index + 1);
+        }, 50);
+      } else {
+        setIsSpeaking(false);
+        isSpeakingActiveRef.current = false;
+        speechSynthesisRef.current = null;
+      }
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+      // Try to continue with the next chunk even if there's an error
+      if (!isLastChunk) {
+        setTimeout(() => {
+          speakChunks(chunks, index + 1);
+        }, 50);
+      } else {
+        setIsSpeaking(false);
+        isSpeakingActiveRef.current = false;
+        speechSynthesisRef.current = null;
       }
     };
 
@@ -225,8 +261,9 @@ export default function CareerCoachChatbot() {
       // Check if speech synthesis is still available
       if (!window.speechSynthesis) return;
 
-      // Split very long text into chunks (some browsers have limits around 200-300 chars)
-      const maxLength = 200;
+      // Split text into smaller chunks to avoid browser cutoff
+      // Use sentence boundaries for more natural speech
+      const maxLength = 150; // Reduced from 200 for better reliability
       const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
       let currentChunk = "";
       const chunks: string[] = [];
@@ -241,14 +278,14 @@ export default function CareerCoachChatbot() {
       }
       if (currentChunk) chunks.push(currentChunk.trim());
 
-      // If text is short, just speak it directly
-      if (chunks.length <= 1) {
+      // If text is short enough, speak it directly
+      if (chunks.length <= 1 && text.length <= maxLength) {
         const utterance = new SpeechSynthesisUtterance(text);
         setupUtterance(utterance, true);
         speechSynthesisRef.current = utterance;
         window.speechSynthesis.speak(utterance);
       } else {
-        // Speak chunks one by one
+        // Speak chunks one by one with improved handling
         speakChunks(chunks, 0);
       }
     }, 100);
@@ -260,10 +297,10 @@ export default function CareerCoachChatbot() {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    isSpeakingActiveRef.current = false;
     speechSynthesisRef.current = null;
   };
 
-  // Auto-speak when coach messages arrive
   // Auto-speak when coach messages arrive
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
@@ -386,9 +423,16 @@ export default function CareerCoachChatbot() {
   };
 
   // Store the function reference for use in speech recognition
+  // Use useCallback to prevent this from changing on every render
+  const handleSendQuestionStable = useRef(handleSendQuestion);
+
   useEffect(() => {
-    handleSendQuestionRef.current = handleSendQuestion;
-  }, [messages]);
+    handleSendQuestionStable.current = handleSendQuestion;
+  });
+
+  useEffect(() => {
+    handleSendQuestionRef.current = handleSendQuestionStable.current;
+  }, []);
 
   // Handle text input submission
   const handleSendMessage = () => {
