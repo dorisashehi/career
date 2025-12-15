@@ -39,6 +39,7 @@ export default function CareerCoachChatbot() {
   const handleSendQuestionRef = useRef<
     ((question: string) => Promise<void>) | null
   >(null);
+  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
   const { toast } = useToast();
 
   const scrollToBottom = () => {
@@ -154,17 +155,130 @@ export default function CareerCoachChatbot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
-  // Auto-speaking animation when coach messages arrive
+  // Helper function to set up utterance event handlers
+  const setupUtterance = (
+    utterance: SpeechSynthesisUtterance,
+    isLastChunk: boolean = true
+  ) => {
+    utterance.lang = "en-US";
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      if (isLastChunk) {
+        setIsSpeaking(false);
+        speechSynthesisRef.current = null;
+      }
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+      setIsSpeaking(false);
+      speechSynthesisRef.current = null;
+    };
+  };
+
+  // Helper function to speak text chunks sequentially
+  const speakChunks = (chunks: string[], index: number) => {
+    if (index >= chunks.length) {
+      // All chunks done
+      setIsSpeaking(false);
+      speechSynthesisRef.current = null;
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+    const isLastChunk = index === chunks.length - 1;
+    setupUtterance(utterance, isLastChunk);
+
+    utterance.onend = () => {
+      // Speak next chunk
+      if (!isLastChunk) {
+        speakChunks(chunks, index + 1);
+      }
+    };
+
+    speechSynthesisRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Function to speak text using text-to-speech
+  const speakText = (text: string) => {
+    // Stop any current speech first
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    // Check if browser supports speech synthesis
+    if (!("speechSynthesis" in window)) {
+      console.warn("Text-to-speech not supported in this browser");
+      return;
+    }
+
+    // Wait a bit to ensure previous speech is fully cancelled
+    setTimeout(() => {
+      // Check if speech synthesis is still available
+      if (!window.speechSynthesis) return;
+
+      // Split very long text into chunks (some browsers have limits around 200-300 chars)
+      const maxLength = 200;
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      let currentChunk = "";
+      const chunks: string[] = [];
+
+      for (const sentence of sentences) {
+        if ((currentChunk + sentence).length <= maxLength) {
+          currentChunk += sentence;
+        } else {
+          if (currentChunk) chunks.push(currentChunk.trim());
+          currentChunk = sentence;
+        }
+      }
+      if (currentChunk) chunks.push(currentChunk.trim());
+
+      // If text is short, just speak it directly
+      if (chunks.length <= 1) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        setupUtterance(utterance, true);
+        speechSynthesisRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+      } else {
+        // Speak chunks one by one
+        speakChunks(chunks, 0);
+      }
+    }, 100);
+  };
+
+  // Stop speaking
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+    speechSynthesisRef.current = null;
+  };
+
+  // Auto-speak when coach messages arrive
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === "coach") {
-      setIsSpeaking(true);
-      // Stop speaking after message "finishes"
-      const timer = setTimeout(() => {
-        setIsSpeaking(false);
-      }, lastMessage.content.length * 50);
-      return () => clearTimeout(timer);
+
+    // Only speak if it's a coach message and not the initial welcome message
+    if (lastMessage?.role === "coach" && lastMessage.id !== "1") {
+      // Check if we're not already speaking
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        speakText(lastMessage.content);
+      }
     }
+
+    // Cleanup: stop speaking when component unmounts
+    return () => {
+      stopSpeaking();
+    };
   }, [messages]);
 
   // Convert our messages to the format the API expects
@@ -185,8 +299,8 @@ export default function CareerCoachChatbot() {
     // Don't send empty questions
     if (!question.trim()) return;
 
-    // Stop the coach from "speaking" animation
-    setIsSpeaking(false);
+    // Stop any current speech
+    stopSpeaking();
 
     // Create a message object for the user's question
     const userMessage: Message = {
@@ -297,7 +411,7 @@ export default function CareerCoachChatbot() {
 
     if (!isRecording) {
       // Start recording
-      setIsSpeaking(false); // Stop the coach animation
+      stopSpeaking(); // Stop any current speech
       setTranscript(""); // Clear any old text
       setIsRecording(true); // Mark that we're recording
 
