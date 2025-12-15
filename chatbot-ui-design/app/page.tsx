@@ -1,19 +1,21 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Home, Search, Briefcase, Menu, Send } from "lucide-react"
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Home, Search, Briefcase, Menu, Send, Mic, MicOff } from "lucide-react";
+import { askQuestion, type ChatMessage as ApiChatMessage } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 type Message = {
-  id: string
-  role: "user" | "coach"
-  content: string
-  timestamp: string
-}
+  id: string;
+  role: "user" | "coach";
+  content: string;
+  timestamp: string;
+};
 
 export default function CareerCoachChatbot() {
   const [messages, setMessages] = useState<Message[]>([
@@ -24,89 +26,292 @@ export default function CareerCoachChatbot() {
         "Hello! I'm your career coach. I'm here to help you navigate your professional journey. What would you like to discuss today?",
       timestamp: "9:32 AM",
     },
-  ])
-  const [inputValue, setInputValue] = useState("")
-  const [isSpeaking, setIsSpeaking] = useState(true)
-  const [isTyping, setIsTyping] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  ]);
+  const [inputValue, setInputValue] = useState("");
+  const [isSpeaking, setIsSpeaking] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef<string>("");
+  const handleSendQuestionRef = useRef<
+    ((question: string) => Promise<void>) | null
+  >(null);
+  const { toast } = useToast();
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    scrollToBottom();
+  }, [messages]);
+
+  // Initialize speech recognition on mount
+  useEffect(() => {
+    // Check for browser support
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      setIsSpeechSupported(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + " ";
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          const trimmedFinal = finalTranscript.trim();
+          finalTranscriptRef.current = trimmedFinal;
+          setTranscript(trimmedFinal);
+        } else {
+          setTranscript(interimTranscript);
+        }
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("Speech recognition error:", event.error);
+        setIsRecording(false);
+        setTranscript("");
+
+        let errorMessage = "Speech recognition error occurred";
+        switch (event.error) {
+          case "no-speech":
+            errorMessage = "No speech detected. Please try again.";
+            break;
+          case "audio-capture":
+            errorMessage = "No microphone found. Please check your microphone.";
+            break;
+          case "not-allowed":
+            errorMessage =
+              "Microphone permission denied. Please allow microphone access.";
+            break;
+          case "network":
+            errorMessage = "Network error. Please check your connection.";
+            break;
+          default:
+            errorMessage = `Speech recognition error: ${event.error}`;
+        }
+
+        toast({
+          title: "Recording Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        // If we have a final transcript, send it to the API
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText && handleSendQuestionRef.current) {
+          // Use setTimeout to ensure state updates are processed
+          setTimeout(() => {
+            handleSendQuestionRef.current?.(finalText);
+            finalTranscriptRef.current = "";
+            setTranscript("");
+          }, 100);
+        } else {
+          setTranscript("");
+        }
+      };
+
+      recognitionRef.current = recognition;
+    } else {
+      setIsSpeechSupported(false);
+      toast({
+        title: "Speech Recognition Not Supported",
+        description:
+          "Your browser doesn't support speech recognition. Please use the text input instead.",
+        variant: "default",
+      });
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Auto-speaking animation when coach messages arrive
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1]
+    const lastMessage = messages[messages.length - 1];
     if (lastMessage?.role === "coach") {
-      setIsSpeaking(true)
+      setIsSpeaking(true);
       // Stop speaking after message "finishes"
       const timer = setTimeout(() => {
-        setIsSpeaking(false)
-      }, lastMessage.content.length * 50)
-      return () => clearTimeout(timer)
+        setIsSpeaking(false);
+      }, lastMessage.content.length * 50);
+      return () => clearTimeout(timer);
     }
-  }, [messages])
+  }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
+  // Convert frontend messages to API format
+  const convertMessagesToApiFormat = (msgs: Message[]): ApiChatMessage[] => {
+    // Skip the initial welcome message
+    return msgs
+      .filter((msg) => msg.id !== "1")
+      .map((msg) => ({
+        role: msg.role === "coach" ? "assistant" : "user",
+        content: msg.content,
+      }));
+  };
 
-    // Stop coach from speaking when user asks question
-    setIsSpeaking(false)
+  // Handle sending a question to the API
+  const handleSendQuestion = async (question: string) => {
+    if (!question.trim()) return;
 
+    setIsSpeaking(false);
+
+    // Add user message to chat
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: inputValue,
-      timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
-    }
+      content: question.trim(),
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    };
 
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
-    setIsTyping(true)
+    setMessages((prev) => [...prev, userMessage]);
+    setIsTyping(true);
 
-    // Simulate coach response
-    setTimeout(() => {
-      const responses = [
-        "That's a great question! Let me help you think through that. Career transitions can be challenging, but with the right strategy and mindset, you can make a successful move.",
-        "I understand your concern. Many professionals face similar challenges. Let's break this down into actionable steps that you can start implementing today.",
-        "Excellent! It sounds like you're ready to take the next step in your career. Have you considered updating your LinkedIn profile and networking strategy?",
-        "That's an important milestone you're working toward. Let's create a roadmap to help you achieve your goals. What timeline are you working with?",
-      ]
+    try {
+      // Convert chat history to API format
+      const chatHistory = convertMessagesToApiFormat([
+        ...messages,
+        userMessage,
+      ]);
 
+      // Call the API
+      const answer = await askQuestion(question.trim(), chatHistory);
+
+      // Add coach response
       const coachMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
-        content: responses[Math.floor(Math.random() * responses.length)],
-        timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+        content: answer,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+
+      setIsTyping(false);
+      setMessages((prev) => [...prev, coachMessage]);
+    } catch (error) {
+      setIsTyping(false);
+      console.error("Error calling API:", error);
+      console.error("Error type:", typeof error);
+      console.error("Error details:", JSON.stringify(error, null, 2));
+
+      let errorMessage = "Failed to get response from the server";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === "object" && "message" in error) {
+        errorMessage = String((error as any).message);
+      } else {
+        errorMessage = `Unexpected error: ${String(error)}`;
       }
 
-      setIsTyping(false)
-      setMessages((prev) => [...prev, coachMessage])
-    }, 2000)
-  }
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+
+      // Optionally add an error message to the chat
+      const errorChatMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "coach",
+        content:
+          "I'm sorry, I encountered an error. Please try again or check your connection.",
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorChatMessage]);
+    }
+  };
+
+  // Store the function reference for use in speech recognition
+  useEffect(() => {
+    handleSendQuestionRef.current = handleSendQuestion;
+  }, [messages]);
+
+  // Handle text input submission
+  const handleSendMessage = () => {
+    if (!inputValue.trim()) return;
+    handleSendQuestion(inputValue);
+    setInputValue("");
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
+      e.preventDefault();
+      handleSendMessage();
     }
-  }
+  };
 
   const handleStartRecording = () => {
-    setIsRecording(!isRecording)
-    if (!isRecording) {
-      setIsSpeaking(false)
-      // In a real app, this would start voice recording
-      console.log("[v0] Starting voice recording...")
-    } else {
-      console.log("[v0] Stopping voice recording...")
+    if (!isSpeechSupported) {
+      toast({
+        title: "Not Supported",
+        description:
+          "Speech recognition is not supported in your browser. Please use the text input.",
+        variant: "default",
+      });
+      return;
     }
-  }
+
+    if (!isRecording) {
+      // Start recording
+      setIsSpeaking(false);
+      setTranscript("");
+      setIsRecording(true);
+
+      try {
+        if (recognitionRef.current) {
+          recognitionRef.current.start();
+        }
+      } catch (error) {
+        console.error("Error starting recognition:", error);
+        setIsRecording(false);
+        toast({
+          title: "Recording Error",
+          description: "Failed to start recording. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Stop recording
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -118,13 +323,25 @@ export default function CareerCoachChatbot() {
             <h1 className="text-lg md:text-xl font-semibold">CareerPath</h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
               <Home className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
               <Search className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
               <Briefcase className="w-5 h-5" />
             </Button>
             <Button
@@ -150,16 +367,27 @@ export default function CareerCoachChatbot() {
 
               {/* Avatar */}
               <div
-                className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden bg-gradient-to-br from-accent to-accent/70 shadow-2xl transition-transform duration-300 ${isSpeaking ? "animate-speak" : ""}`}
+                className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden bg-gradient-to-br from-accent to-accent/70 shadow-2xl transition-transform duration-300 ${
+                  isSpeaking ? "animate-speak" : ""
+                }`}
               >
                 <svg viewBox="0 0 400 400" className="w-full h-full">
                   {/* Head */}
                   <ellipse cx="200" cy="180" rx="100" ry="120" fill="#f4a261" />
 
                   {/* Hair */}
-                  <path d="M100 140 Q100 60 200 60 Q300 60 300 140" fill="#2d3748" />
-                  <path d="M100 140 L100 180 Q100 120 130 110 Z" fill="#2d3748" />
-                  <path d="M300 140 L300 180 Q300 120 270 110 Z" fill="#2d3748" />
+                  <path
+                    d="M100 140 Q100 60 200 60 Q300 60 300 140"
+                    fill="#2d3748"
+                  />
+                  <path
+                    d="M100 140 L100 180 Q100 120 130 110 Z"
+                    fill="#2d3748"
+                  />
+                  <path
+                    d="M300 140 L300 180 Q300 120 270 110 Z"
+                    fill="#2d3748"
+                  />
 
                   {/* Eyes */}
                   <ellipse cx="165" cy="170" rx="15" ry="20" fill="#2d3748" />
@@ -168,13 +396,29 @@ export default function CareerCoachChatbot() {
                   <ellipse cx="240" cy="168" rx="6" ry="8" fill="white" />
 
                   {/* Nose */}
-                  <path d="M200 185 L195 205 L205 205 Z" fill="#e76f51" opacity="0.5" />
+                  <path
+                    d="M200 185 L195 205 L205 205 Z"
+                    fill="#e76f51"
+                    opacity="0.5"
+                  />
 
                   {/* Mouth - changes based on speaking */}
                   {isSpeaking ? (
-                    <ellipse cx="200" cy="220" rx="30" ry="15" fill="#2d3748" opacity="0.8" />
+                    <ellipse
+                      cx="200"
+                      cy="220"
+                      rx="30"
+                      ry="15"
+                      fill="#2d3748"
+                      opacity="0.8"
+                    />
                   ) : (
-                    <path d="M180 220 Q200 230 220 220" stroke="#2d3748" strokeWidth="3" fill="none" />
+                    <path
+                      d="M180 220 Q200 230 220 220"
+                      stroke="#2d3748"
+                      strokeWidth="3"
+                      fill="none"
+                    />
                   )}
 
                   {/* Shirt */}
@@ -190,32 +434,70 @@ export default function CareerCoachChatbot() {
               {/* Speaking indicator */}
               {isSpeaking && (
                 <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-accent text-accent-foreground px-4 py-2 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  />
                 </div>
               )}
             </div>
 
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold text-foreground">Sarah Mitchell</h2>
+              <h2 className="text-2xl font-semibold text-foreground">
+                Sarah Mitchell
+              </h2>
               <p className="text-muted-foreground">Senior Career Coach</p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                15+ years helping professionals find their path and achieve their career goals
+                15+ years helping professionals find their path and achieve
+                their career goals
               </p>
             </div>
 
             {/* Start Recording button */}
             <Button
               onClick={handleStartRecording}
+              disabled={!isSpeechSupported}
               className={`px-8 py-3 text-base font-medium ${
                 isRecording
                   ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   : "bg-primary text-primary-foreground hover:bg-primary/90"
               }`}
             >
-              {isRecording ? "Stop Recording" : "Start Recording"}
+              {isRecording ? (
+                <>
+                  <MicOff className="w-5 h-5 mr-2" />
+                  Stop Recording
+                </>
+              ) : (
+                <>
+                  <Mic className="w-5 h-5 mr-2" />
+                  Start Recording
+                </>
+              )}
             </Button>
+
+            {/* Recording indicator with transcript */}
+            {isRecording && (
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="flex items-center gap-2 text-destructive">
+                  <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
+                  <span className="text-sm font-medium">Recording...</span>
+                </div>
+                {transcript && (
+                  <div className="max-w-xs text-sm text-muted-foreground bg-muted px-4 py-2 rounded-lg">
+                    {transcript}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Chat Section */}
@@ -226,7 +508,9 @@ export default function CareerCoachChatbot() {
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}
+                    className={`flex flex-col ${
+                      message.role === "user" ? "items-end" : "items-start"
+                    }`}
                   >
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-3 ${
@@ -235,10 +519,18 @@ export default function CareerCoachChatbot() {
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {message.role === "coach" && <p className="font-semibold text-sm mb-1 text-foreground">Coach:</p>}
-                      <p className="text-sm leading-relaxed">{message.content}</p>
+                      {message.role === "coach" && (
+                        <p className="font-semibold text-sm mb-1 text-foreground">
+                          Coach:
+                        </p>
+                      )}
+                      <p className="text-sm leading-relaxed">
+                        {message.content}
+                      </p>
                     </div>
-                    <span className="text-xs text-muted-foreground mt-1 px-2">{message.timestamp}</span>
+                    <span className="text-xs text-muted-foreground mt-1 px-2">
+                      {message.timestamp}
+                    </span>
                   </div>
                 ))}
 
@@ -290,13 +582,29 @@ export default function CareerCoachChatbot() {
 
             {/* Quick Actions */}
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => setInputValue("How do I negotiate a better salary?")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setInputValue("How do I negotiate a better salary?")
+                }
+              >
                 Salary Tips
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setInputValue("I want to change careers")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInputValue("I want to change careers")}
+              >
                 Career Change
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setInputValue("Help me prepare for an interview")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setInputValue("Help me prepare for an interview")
+                }
+              >
                 Interview Prep
               </Button>
             </div>
@@ -304,5 +612,5 @@ export default function CareerCoachChatbot() {
         </div>
       </main>
     </div>
-  )
+  );
 }

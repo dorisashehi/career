@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from services.rag_service import build_rag_chain, ask_question
 from pydantic import BaseModel
 from typing import List, Optional
@@ -7,6 +8,16 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 
 app = FastAPI()
+
+# Add CORS middleware to allow frontend to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 rag_chain = build_rag_chain()
 
 
