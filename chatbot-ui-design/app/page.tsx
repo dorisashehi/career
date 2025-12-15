@@ -264,6 +264,7 @@ export default function CareerCoachChatbot() {
   };
 
   // Auto-speak when coach messages arrive
+  // Auto-speak when coach messages arrive
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
 
@@ -275,11 +276,18 @@ export default function CareerCoachChatbot() {
       }
     }
 
-    // Cleanup: stop speaking when component unmounts
-    return () => {
-      stopSpeaking();
-    };
+    // Note: No cleanup function here to prevent interrupting speech on scroll
   }, [messages]);
+
+  // Cleanup effect that only runs on component unmount
+  useEffect(() => {
+    return () => {
+      // Stop speaking only when component unmounts
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Convert our messages to the format the API expects
   // The API uses "assistant" but we use "coach" in the UI
