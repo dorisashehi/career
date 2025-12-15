@@ -18,6 +18,8 @@ import {
   Calendar,
   ThumbsUp,
   MessageSquare,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import {
   askQuestion,
@@ -50,6 +52,8 @@ export default function CareerCoachChatbot() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const isMutedRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const finalTranscriptRef = useRef<string>("");
@@ -64,6 +68,25 @@ export default function CareerCoachChatbot() {
   const isCancellingRef = useRef(false);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const MAX_SPEECH_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  // Store paused speech state for resuming
+  const pausedSpeechRef = useRef<{
+    chunks: string[];
+    currentIndex: number;
+    messageId: string;
+  } | null>(null);
+
+  // Track current speech state for saving when muting
+  const currentSpeechRef = useRef<{
+    chunks: string[];
+    currentIndex: number;
+    messageId: string | undefined;
+  } | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -219,12 +242,41 @@ export default function CareerCoachChatbot() {
   };
 
   // Helper function to speak text chunks sequentially
-  const speakChunks = (chunks: string[], index: number) => {
+  const speakChunks = (chunks: string[], index: number, messageId?: string) => {
+    // Update current speech state
+    currentSpeechRef.current = {
+      chunks,
+      currentIndex: index,
+      messageId,
+    };
+
+    // Pause if muted (check ref for latest value) - save state for resuming
+    if (isMutedRef.current) {
+      // Save the paused state so we can resume later
+      if (messageId) {
+        pausedSpeechRef.current = {
+          chunks,
+          currentIndex: index,
+          messageId,
+        };
+      }
+      // Cancel current speech but don't clear the state
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+      isSpeakingActiveRef.current = false;
+      speechSynthesisRef.current = null;
+      return;
+    }
+
     if (index >= chunks.length) {
       // All chunks done
       setIsSpeaking(false);
       isSpeakingActiveRef.current = false;
       speechSynthesisRef.current = null;
+      currentSpeechRef.current = null;
+      pausedSpeechRef.current = null;
       // Clear timeout when done
       if (speechTimeoutRef.current) {
         clearTimeout(speechTimeoutRef.current);
@@ -238,16 +290,28 @@ export default function CareerCoachChatbot() {
     setupUtterance(utterance, isLastChunk);
 
     utterance.onend = () => {
+      // Stop if muted before speaking next chunk (check ref for latest value)
+      if (isMutedRef.current) {
+        stopSpeaking();
+        return;
+      }
+
       // Speak next chunk immediately after the previous one finishes
       if (!isLastChunk) {
         // Use a small delay to ensure the previous utterance is fully cleared
         setTimeout(() => {
-          speakChunks(chunks, index + 1);
+          // Pass messageId if available (check if it's in the closure or get from pausedSpeechRef)
+          const msgId =
+            pausedSpeechRef.current?.messageId ||
+            lastSpokenMessageIdRef.current;
+          speakChunks(chunks, index + 1, msgId || undefined);
         }, 50);
       } else {
         setIsSpeaking(false);
         isSpeakingActiveRef.current = false;
         speechSynthesisRef.current = null;
+        currentSpeechRef.current = null;
+        pausedSpeechRef.current = null;
         // Clear timeout when done
         if (speechTimeoutRef.current) {
           clearTimeout(speechTimeoutRef.current);
@@ -261,12 +325,17 @@ export default function CareerCoachChatbot() {
       // Try to continue with the next chunk even if there's an error
       if (!isLastChunk) {
         setTimeout(() => {
-          speakChunks(chunks, index + 1);
+          const msgId =
+            pausedSpeechRef.current?.messageId ||
+            lastSpokenMessageIdRef.current;
+          speakChunks(chunks, index + 1, msgId || undefined);
         }, 50);
       } else {
         setIsSpeaking(false);
         isSpeakingActiveRef.current = false;
         speechSynthesisRef.current = null;
+        currentSpeechRef.current = null;
+        pausedSpeechRef.current = null;
         // Clear timeout when done
         if (speechTimeoutRef.current) {
           clearTimeout(speechTimeoutRef.current);
@@ -280,8 +349,39 @@ export default function CareerCoachChatbot() {
   };
 
   // Function to speak text using text-to-speech with timeout and chunking
-  const speakText = (text: string) => {
+  const speakText = (text: string, messageId?: string) => {
     if (!("speechSynthesis" in window)) return;
+    // Don't speak if muted (check ref for latest value)
+    if (isMutedRef.current) {
+      // If muted, still prepare the chunks and save them for when unmuted
+      const chunkSize = 200;
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      const chunks: string[] = [];
+      let currentChunk = "";
+
+      for (const sentence of sentences) {
+        if ((currentChunk + sentence).length <= chunkSize) {
+          currentChunk += sentence;
+        } else {
+          if (currentChunk) chunks.push(currentChunk.trim());
+          currentChunk = sentence;
+        }
+      }
+      if (currentChunk) chunks.push(currentChunk.trim());
+
+      if (chunks.length === 0) {
+        chunks.push(text);
+      }
+
+      if (messageId) {
+        pausedSpeechRef.current = {
+          chunks,
+          currentIndex: 0,
+          messageId,
+        };
+      }
+      return;
+    }
 
     // HARD STOP everything
     window.speechSynthesis.cancel();
@@ -325,11 +425,11 @@ export default function CareerCoachChatbot() {
     }, MAX_SPEECH_DURATION);
 
     // Speak chunks sequentially
-    speakChunks(chunks, 0);
+    speakChunks(chunks, 0, messageId);
   };
 
   // Stop speaking
-  const stopSpeaking = () => {
+  const stopSpeaking = (clearPaused = false) => {
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -341,6 +441,11 @@ export default function CareerCoachChatbot() {
       clearTimeout(speechTimeoutRef.current);
       speechTimeoutRef.current = null;
     }
+    // Clear paused speech if requested (e.g., when starting new speech)
+    if (clearPaused) {
+      pausedSpeechRef.current = null;
+      currentSpeechRef.current = null;
+    }
   };
 
   // Auto-speak when coach messages arrive
@@ -350,13 +455,65 @@ export default function CareerCoachChatbot() {
     if (
       lastMessage?.role === "coach" &&
       lastMessage.id !== "1" &&
-      lastSpokenMessageIdRef.current !== lastMessage.id
+      lastSpokenMessageIdRef.current !== lastMessage.id &&
+      !isMuted
     ) {
-      stopSpeaking(); // ensure clean start
+      stopSpeaking(true); // ensure clean start and clear any paused speech
       lastSpokenMessageIdRef.current = lastMessage.id;
-      speakText(lastMessage.content);
+      speakText(lastMessage.content, lastMessage.id);
     }
-  }, [messages]);
+  }, [messages, isMuted]);
+
+  // Toggle mute/unmute
+  const handleToggleMute = () => {
+    const newMuted = !isMuted;
+
+    // Update ref immediately so speakChunks can check it
+    isMutedRef.current = newMuted;
+
+    setIsMuted(newMuted);
+
+    // If we're muting and currently speaking, pause the speech and save state
+    if (newMuted && isSpeaking && currentSpeechRef.current) {
+      // Save the current speech state for resuming
+      const current = currentSpeechRef.current;
+      if (current.messageId) {
+        pausedSpeechRef.current = {
+          chunks: current.chunks,
+          currentIndex: current.currentIndex,
+          messageId: current.messageId,
+        };
+      }
+      // Cancel current speech
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+      isSpeakingActiveRef.current = false;
+      speechSynthesisRef.current = null;
+    }
+    // If we're unmuting and there's paused speech, resume it
+    else if (!newMuted && pausedSpeechRef.current) {
+      const paused = pausedSpeechRef.current;
+      // Resume from where we left off
+      setTimeout(() => {
+        // Set a maximum duration timeout for the resumed speech
+        speechTimeoutRef.current = setTimeout(() => {
+          stopSpeaking(true);
+          toast({
+            title: "Speech Timeout",
+            description: "Speech stopped after maximum duration.",
+            variant: "default",
+          });
+        }, MAX_SPEECH_DURATION);
+
+        // Resume speaking from the paused position
+        setIsSpeaking(true);
+        isSpeakingActiveRef.current = true;
+        speakChunks(paused.chunks, paused.currentIndex, paused.messageId);
+      }, 100);
+    }
+  };
 
   // Cleanup effect that stops speech on page reload/unload
   useEffect(() => {
@@ -702,9 +859,24 @@ export default function CareerCoachChatbot() {
             </div>
 
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold text-foreground">
-                Sarah Mitchell
-              </h2>
+              <div className="flex items-center justify-center gap-3">
+                <h2 className="text-2xl font-semibold text-foreground">
+                  Sarah Mitchell
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleMute}
+                  className="h-8 w-8 rounded-full"
+                  title={isMuted ? "Unmute voice" : "Mute voice"}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
               <p className="text-muted-foreground">Senior Career Coach</p>
               <p className="text-sm text-muted-foreground max-w-xs">
                 15+ years helping professionals find their path and achieve
