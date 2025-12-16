@@ -213,6 +213,49 @@ def clean_comments(input_csv, output_csv, min_text_length=20):
     return df
 
 
+def clean_posts_df(df, min_text_length=10):
+    if df.empty:
+        return df
+
+    initial_count = len(df)
+    text_columns = ['title', 'text', 'full_text']
+
+    for col in text_columns:
+        if col in df.columns:
+            df[col] = df[col].apply(clean_text)
+
+    if 'text' in df.columns:
+        df = df[df['text'].str.len() >= min_text_length]
+
+    if 'title' in df.columns:
+        df = df[df['title'].str.len() > 0]
+
+    removed_count = initial_count - len(df)
+    print(f"   Cleaned {initial_count} posts")
+    print(f"   Removed {removed_count} posts")
+    print(f"   Kept {len(df)} posts")
+
+    return df
+
+
+def clean_comments_df(df, min_text_length=20):
+    if df.empty:
+        return df
+
+    initial_count = len(df)
+
+    if 'text' in df.columns:
+        df['text'] = df['text'].apply(clean_text)
+        df = df[~df['text'].apply(lambda x: is_irrelevant_comment(x, min_text_length))]
+
+    removed_count = initial_count - len(df)
+    print(f"   Cleaned {initial_count} comments")
+    print(f"   Removed {removed_count} comments")
+    print(f"   Kept {len(df)} comments")
+
+    return df
+
+
 def clean_reddit_data(
     posts_input="data/raw/posts.csv",
     comments_input="data/raw/comments.csv",

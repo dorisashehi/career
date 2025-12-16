@@ -6,9 +6,8 @@ import pandas as pd
 from sqlalchemy.orm import Session
 from database.db import SessionLocal, init_db
 from database.models import Post, Comment
-from scripts.collect_reddit_public import collect_reddit_data
-from scripts.clean_data import clean_reddit_data
-import tempfile
+from scripts.collect_reddit_public import collect_reddit_data_to_dataframes
+from scripts.clean_data import clean_posts_df, clean_comments_df
 
 
 def df_to_dict_list(df):
@@ -77,68 +76,52 @@ def main():
 
     init_db()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        posts_raw = os.path.join(tmpdir, "posts.csv")
-        comments_raw = os.path.join(tmpdir, "comments.csv")
-        posts_cleaned = os.path.join(tmpdir, "posts_cleaned.csv")
-        comments_cleaned = os.path.join(tmpdir, "comments_cleaned.csv")
+    print("\n1. Collecting data from Reddit...")
+    subreddits = [
+        "cscareerquestions",
+        "jobs",
+        "ExperiencedDevs",
+        "ITCareerQuestions",
+    ]
 
-        print("\n1. Collecting data from Reddit...")
-        subreddits = [
-            "cscareerquestions",
-            "jobs",
-            "ExperiencedDevs",
-            "ITCareerQuestions",
-        ]
+    posts_df, comments_df = collect_reddit_data_to_dataframes(
+        subreddits=subreddits,
+        posts_per_sub=20,
+        min_score=5,
+        min_comments=3,
+        min_text_length=100,
+        sort="top",
+        time_filter="year",
+        max_workers=10,
+        max_comments=50
+    )
 
-        collect_reddit_data(
-            subreddits=subreddits,
-            posts_per_sub=20,
-            posts_csv=posts_raw,
-            comments_csv=comments_raw,
-            min_score=5,
-            min_comments=3,
-            min_text_length=100,
-            sort="top",
-            time_filter="year",
-            max_workers=10,
-            max_comments=50
-        )
+    if posts_df.empty:
+        print("No posts collected, exiting...")
+        return
 
-        print("\n2. Cleaning data...")
-        clean_reddit_data(
-            posts_input=posts_raw,
-            comments_input=comments_raw,
-            posts_output=posts_cleaned,
-            comments_output=comments_cleaned,
-            min_post_length=10,
-            min_comment_length=20
-        )
+    print("\n2. Cleaning data...")
+    posts_df = clean_posts_df(posts_df, min_text_length=10)
+    comments_df = clean_comments_df(comments_df, min_text_length=20)
 
-        print("\n3. Loading cleaned data into DataFrames...")
-        posts_df = pd.read_csv(posts_cleaned)
-        comments_df = pd.read_csv(comments_cleaned)
+    print(f"\n3. Final data: {len(posts_df)} posts, {len(comments_df)} comments")
 
-        print(f"   Loaded {len(posts_df)} posts")
-        print(f"   Loaded {len(comments_df)} comments")
+    print("\n4. Converting to list of dictionaries...")
+    posts_list = df_to_dict_list(posts_df)
+    comments_list = df_to_dict_list(comments_df)
 
-        print("\n4. Converting to list of dictionaries...")
-        posts_list = df_to_dict_list(posts_df)
-        comments_list = df_to_dict_list(comments_df)
+    print("\n5. Saving to PostgreSQL database...")
+    db = SessionLocal()
+    try:
+        save_posts_to_db(db, posts_list)
+        save_comments_to_db(db, comments_list)
+    finally:
+        db.close()
 
-        print("\n5. Saving to PostgreSQL database...")
-        db = SessionLocal()
-        try:
-            save_posts_to_db(db, posts_list)
-            save_comments_to_db(db, comments_list)
-        finally:
-            db.close()
-
-        print("\n" + "=" * 60)
-        print("Complete!")
-        print("=" * 60)
+    print("\n" + "=" * 60)
+    print("Complete!")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
     main()
-

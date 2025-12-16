@@ -307,6 +307,75 @@ def collect_reddit_data(
 
     print(f"\n📊 Summary: {len(posts_list)} posts, {len(comments_list)} comments")
 
+    posts_df = pd.DataFrame(posts_list) if posts_list else pd.DataFrame()
+    comments_df = pd.DataFrame(comments_list) if comments_list else pd.DataFrame()
+
+    return posts_df, comments_df
+
+
+def collect_reddit_data_to_dataframes(
+    subreddits,
+    posts_per_sub=20,
+    min_score=5,
+    min_comments=3,
+    min_text_length=100,
+    sort="top",
+    time_filter="all",
+    max_workers=10,
+    max_comments=50
+):
+    posts_list = []
+    comments_list = []
+
+    all_posts = []
+    for subreddit in subreddits:
+        print(f"🔍 Fetching posts from r/{subreddit}...")
+        posts = fetch_posts(subreddit, limit=posts_per_sub, sort=sort, time_filter=time_filter)
+        if not posts:
+            print(f"   ⚠️  No posts found for r/{subreddit}, skipping...")
+            continue
+        all_posts.extend(posts)
+
+    if not all_posts:
+        print("⚠️  No posts found from any subreddit")
+        return pd.DataFrame(), pd.DataFrame()
+
+    print(f"💬 Processing {len(all_posts)} posts in parallel with {max_workers} workers...")
+
+    filtered_count = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_post = {
+            executor.submit(
+                process_post,
+                post,
+                min_score,
+                min_comments,
+                min_text_length,
+                max_comments
+            ): post for post in all_posts
+        }
+
+        for future in as_completed(future_to_post):
+            try:
+                post_data, comments = future.result()
+                if post_data is None:
+                    filtered_count += 1
+                    continue
+                posts_list.append(post_data)
+                comments_list.extend(comments)
+                print(f"   ✓ Processed post {post_data['post_id']} ({len(comments)} comments)")
+            except Exception as e:
+                print(f"   ❌ Error processing post: {e}")
+
+    if filtered_count > 0:
+        print(f"📊 Filtered out {filtered_count} low-quality posts")
+
+    posts_df = pd.DataFrame(posts_list) if posts_list else pd.DataFrame()
+    comments_df = pd.DataFrame(comments_list) if comments_list else pd.DataFrame()
+
+    print(f"📊 Summary: {len(posts_df)} posts, {len(comments_df)} comments")
+    return posts_df, comments_df
+
 
 if __name__ == "__main__":
     os.makedirs("data", exist_ok=True)
