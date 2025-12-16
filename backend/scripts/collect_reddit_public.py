@@ -1,6 +1,5 @@
 """Collect Reddit posts and comments from career-related subreddits (Optimized)."""
 import time
-import os
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
@@ -203,116 +202,6 @@ def process_post(post, min_score, min_comments, min_text_length, max_comments=50
     return post_data, comments
 
 
-def collect_reddit_data(
-    subreddits,
-    posts_per_sub=20,
-    posts_csv="posts.csv",
-    comments_csv="comments.csv",
-    min_score=5,
-    min_comments=3,
-    min_text_length=100,
-    sort="top",
-    time_filter="all",
-    max_workers=10,
-    max_comments=50
-):
-    """
-    Collect high-quality posts and comments from specified subreddits (parallel version).
-
-    Args:
-        subreddits: List of subreddit names
-        posts_per_sub: Number of posts to fetch per subreddit
-        posts_csv: Output file for posts
-        comments_csv: Output file for comments
-        min_score: Minimum upvotes required (default: 5)
-        min_comments: Minimum number of comments required (default: 3)
-        min_text_length: Minimum post text length in characters (default: 100)
-        sort: Sort method - "top", "hot", or "new" (default: "top")
-        time_filter: Time filter for "top" - "all", "year", "month", "week", "day"
-        max_workers: Maximum number of parallel workers (default: 10)
-        max_comments: Maximum comments to fetch per post (default: 50)
-    """
-    posts_list = []
-    comments_list = []
-
-    # Step 1: Fetch all posts from all subreddits (can be parallelized if needed)
-    all_posts = []
-    for subreddit in subreddits:
-        print(f"\n🔍 Fetching posts from r/{subreddit}...")
-        posts = fetch_posts(subreddit, limit=posts_per_sub, sort=sort, time_filter=time_filter)
-
-        if not posts:
-            print(f"   ⚠️  No posts found for r/{subreddit}, skipping...")
-            continue
-
-        all_posts.extend(posts)
-
-    if not all_posts:
-        print("\n⚠️  No posts found from any subreddit")
-        return
-
-    print(f"\n💬 Processing {len(all_posts)} posts in parallel with {max_workers} workers...")
-
-    # Step 2: Process all posts in parallel (filter + fetch comments)
-    filtered_count = 0
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
-        future_to_post = {
-            executor.submit(
-                process_post,
-                post,
-                min_score,
-                min_comments,
-                min_text_length,
-                max_comments
-            ): post for post in all_posts
-        }
-
-        # Process completed tasks
-        for future in as_completed(future_to_post):
-            try:
-                post_data, comments = future.result()
-
-                if post_data is None:
-                    filtered_count += 1
-                    continue
-
-                posts_list.append(post_data)
-                comments_list.extend(comments)
-
-                print(f"   ✓ Processed post {post_data['post_id']} ({len(comments)} comments)")
-
-            except Exception as e:
-                print(f"   ❌ Error processing post: {e}")
-
-    if filtered_count > 0:
-        print(f"\n📊 Filtered out {filtered_count} low-quality posts")
-
-    # Save posts to CSV
-    if posts_list:
-        posts_df = pd.DataFrame(posts_list)
-        posts_df.to_csv(posts_csv, index=False)
-        print(f"\n✅ Saved {len(posts_list)} posts to {posts_csv}")
-    else:
-        print("\n⚠️  No posts to save")
-
-    # Save comments to CSV
-    if comments_list:
-        comments_df = pd.DataFrame(comments_list)
-        comments_df.to_csv(comments_csv, index=False)
-        print(f"✅ Saved {len(comments_list)} comments to {comments_csv}")
-    else:
-        print("⚠️  No comments to save")
-
-    print(f"\n📊 Summary: {len(posts_list)} posts, {len(comments_list)} comments")
-
-    posts_df = pd.DataFrame(posts_list) if posts_list else pd.DataFrame()
-    comments_df = pd.DataFrame(comments_list) if comments_list else pd.DataFrame()
-
-    return posts_df, comments_df
-
-
 def collect_reddit_data_to_dataframes(
     subreddits,
     posts_per_sub=20,
@@ -378,8 +267,6 @@ def collect_reddit_data_to_dataframes(
 
 
 if __name__ == "__main__":
-    os.makedirs("data", exist_ok=True)
-
     SUBREDDITS = [
         "cscareerquestions",
         "jobs",
@@ -387,16 +274,15 @@ if __name__ == "__main__":
         "ITCareerQuestions",
     ]
 
-    collect_reddit_data(
+    posts_df, comments_df = collect_reddit_data_to_dataframes(
         subreddits=SUBREDDITS,
         posts_per_sub=50,
-        posts_csv="../data/raw/posts.csv",
-        comments_csv="../data/raw/comments.csv",
         min_score=5,
         min_comments=3,
         min_text_length=100,
         sort="top",
         time_filter="year",
-        max_workers=10,  # Adjust based on your needs
-        max_comments=50  # Limit comments per post
+        max_workers=10,
+        max_comments=50
     )
+    print(f"Collected {len(posts_df)} posts and {len(comments_df)} comments")

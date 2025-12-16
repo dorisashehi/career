@@ -1,7 +1,6 @@
 """Clean Reddit data by removing usernames, URLs, emojis, and irrelevant comments."""
 import re
 import pandas as pd
-import os
 
 
 def remove_urls(text):
@@ -139,80 +138,6 @@ def clean_text(text):
     return text.strip()
 
 
-def clean_posts(input_csv, output_csv, min_text_length=10):
-    """
-    Clean posts CSV file.
-
-    Args:
-        input_csv: Path to input posts CSV
-        output_csv: Path to output cleaned posts CSV
-        min_text_length: Minimum text length to keep post (default: 10)
-    """
-    print(f"\n🧹 Cleaning posts from {input_csv}...")
-
-    # Read posts
-    df = pd.read_csv(input_csv)
-    initial_count = len(df)
-
-    # Clean text fields
-    text_columns = ['title', 'text', 'full_text']
-    for col in text_columns:
-        if col in df.columns:
-            df[col] = df[col].apply(clean_text)
-
-    # Remove posts with text that's too short after cleaning
-    if 'text' in df.columns:
-        df = df[df['text'].str.len() >= min_text_length]
-
-    # Remove posts with empty titles
-    if 'title' in df.columns:
-        df = df[df['title'].str.len() > 0]
-
-    # Save cleaned data
-    df.to_csv(output_csv, index=False)
-
-    removed_count = initial_count - len(df)
-    print(f"   Cleaned {initial_count} posts")
-    print(f"   Removed {removed_count} posts ({removed_count/initial_count*100:.1f}%)")
-    print(f"   Saved {len(df)} posts to {output_csv}")
-
-    return df
-
-
-def clean_comments(input_csv, output_csv, min_text_length=20):
-    """
-    Clean comments CSV file.
-
-    Args:
-        input_csv: Path to input comments CSV
-        output_csv: Path to output cleaned comments CSV
-        min_text_length: Minimum text length to keep comment (default: 20)
-    """
-    print(f"\n🧹 Cleaning comments from {input_csv}...")
-
-    # Read comments
-    df = pd.read_csv(input_csv)
-    initial_count = len(df)
-
-    # Clean text field
-    if 'text' in df.columns:
-        df['text'] = df['text'].apply(clean_text)
-
-    # Remove irrelevant comments
-    if 'text' in df.columns:
-        df = df[~df['text'].apply(lambda x: is_irrelevant_comment(x, min_text_length))]
-
-    # Save cleaned data
-    df.to_csv(output_csv, index=False)
-
-    removed_count = initial_count - len(df)
-    print(f"    Cleaned {initial_count} comments")
-    print(f"    Removed {removed_count} comments ({removed_count/initial_count*100:.1f}%)")
-    print(f"    Saved {len(df)} comments to {output_csv}")
-
-    return df
-
-
 def clean_posts_df(df, min_text_length=10):
     if df.empty:
         return df
@@ -256,65 +181,6 @@ def clean_comments_df(df, min_text_length=20):
     return df
 
 
-def clean_reddit_data(
-    posts_input="data/raw/posts.csv",
-    comments_input="data/raw/comments.csv",
-    posts_output="data/processed/posts_cleaned.csv",
-    comments_output="data/processed/comments_cleaned.csv",
-    min_post_length=10,
-    min_comment_length=20
-):
-    """
-    Clean both posts and comments CSV files.
-
-    Args:
-        posts_input: Path to raw posts CSV
-        comments_input: Path to raw comments CSV
-        posts_output: Path to save cleaned posts CSV
-        comments_output: Path to save cleaned comments CSV
-        min_post_length: Minimum post text length (default: 50)
-        min_comment_length: Minimum comment text length (default: 20)
-    """
-    print("=" * 60)
-    print("🚀 Starting Reddit Data Cleaning")
-    print("=" * 60)
-
-    # Check if input files exist
-    if not os.path.exists(posts_input):
-        print(f"❌ Error: {posts_input} not found!")
-        return
-
-    if not os.path.exists(comments_input):
-        print(f"❌ Error: {comments_input} not found!")
-        return
-
-    # Clean posts
-    posts_df = clean_posts(posts_input, posts_output, min_post_length)
-
-    # Clean comments
-    comments_df = clean_comments(comments_input, comments_output, min_comment_length)
-
-    # Summary
-    print("\n" + "=" * 60)
-    print("Cleaning Complete!")
-    print("=" * 60)
-    print(f"   Final Stats:")
-    print(f"   Posts: {len(posts_df)}")
-    print(f"   Comments: {len(comments_df)}")
-    print(f"   Total cleaned records: {len(posts_df) + len(comments_df)}")
-    print(f"\n Output files:")
-    print(f"   {posts_output}")
-    print(f"   {comments_output}")
-    print("=" * 60)
-
-
 if __name__ == "__main__":
-    # Clean the data
-    clean_reddit_data(
-        posts_input="../data/raw/posts.csv",
-        comments_input="../data/raw/comments.csv",
-        posts_output="../data/processed/posts_cleaned.csv",
-        comments_output="../data/processed/comments_cleaned.csv",
-        min_post_length=10,      # Minimum 10 chars for posts
-        min_comment_length=20    # Minimum 20 chars for comments
-    )
+    print("This script provides DataFrame cleaning functions.")
+    print("Use clean_posts_df() and clean_comments_df() functions.")
