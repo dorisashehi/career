@@ -14,11 +14,12 @@ faiss-cpu==1.7.4
 # faiss-gpu==1.7.4  # Uncomment if you have GPU
 
 # Additional Dependencies
-numpy==1.24.3
 python-dotenv==1.0.0
 sentence-transformers>=5.2.0  # Updated for compatibility
-# Note: Install PyTorch CPU version separately if needed:
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Note: Install PyTorch CPU version separately first to save space:
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
 fastapi
 pydantic
 typing
+sqlalchemy
+psycopg2-binary

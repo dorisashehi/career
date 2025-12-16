@@ -1,7 +1,7 @@
 # Project-specific
 MVP_PRODUCT.md
 PROJECT_FORMULATION.md
-myenv/
+.venv
 /backend/ingest/experiences_raw.csv
 /backend/data/
 /backend/.env
