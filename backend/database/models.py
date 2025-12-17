@@ -36,3 +36,24 @@ class Comment(Base):
     embedding = Column(Vector(384))
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class UserExperience(Base):
+    __tablename__ = "user_experiences"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String)  # Short title/summary of the experience
+    text = Column(Text, nullable=False)
+    experience_type = Column(String)  # "interview", "job_search", "career_advice", etc.
+
+    # Status workflow
+    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    flagged_reason = Column(Text)  # Why it was flagged (bad words, negative sentiment, etc.)
+    flagged_at = Column(DateTime)
+
+    # Embedding (same as posts)
+    embedding = Column(Vector(384))
+
+    # Timestamps
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+    approved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

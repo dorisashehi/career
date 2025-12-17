@@ -7,21 +7,82 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Home, Search, Briefcase, Menu, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function UserFeedback() {
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[v0] Feedback submitted:", { category, description });
-    setIsSubmitted(true);
-    setTimeout(() => {
-      setIsSubmitted(false);
+
+    if (!category || !description.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (description.trim().length < 50) {
+      toast({
+        title: "Description Too Short",
+        description: "Please provide at least 50 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/experiences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          category: category,
+          description: description.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to submit experience");
+      }
+
+      const data = await response.json();
+
+      toast({
+        title: "Experience Submitted!",
+        description:
+          data.message || "Your experience has been submitted successfully.",
+      });
+
       setCategory("");
       setDescription("");
-    }, 3000);
+      setIsSubmitted(true);
+
+      setTimeout(() => {
+        setIsSubmitted(false);
+      }, 3000);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to submit experience. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -186,9 +247,10 @@ export default function UserFeedback() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-3 text-base font-medium"
+                  disabled={isSubmitting}
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-3 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Submit Experience
+                  {isSubmitting ? "Submitting..." : "Submit Experience"}
                 </Button>
               </form>
             )}
