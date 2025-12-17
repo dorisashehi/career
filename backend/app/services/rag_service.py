@@ -10,11 +10,9 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_groq import ChatGroq
-from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database.db import SessionLocal, engine
-from database.models import Post, Comment
-from typing import Any
+from database.models import Comment
 
 load_dotenv()
 
@@ -28,34 +26,34 @@ def load_embeddings():
 
 
 class PgVectorRetriever(BaseRetriever):
-    embeddings: Any
+    embeddings: object = None
     k: int = 5
-    db: Any = None
-
     model_config = {"arbitrary_types_allowed": True}
 
-    def __init__(self, embeddings, k=5, **kwargs):
-        db = SessionLocal()
-        super().__init__(embeddings=embeddings, k=k, db=db, **kwargs)
+    def __init__(self, embeddings, k=5):
+        super().__init__(embeddings=embeddings, k=k)
+        object.__setattr__(self, 'db', SessionLocal())
 
     def _get_relevant_documents(self, query: str):
         query_embedding = self.embeddings.embed_query(query)
-        query_embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
 
-        sql = text("""
-            SELECT
-                id, post_id, title, text, full_text, source, date,
-                post_link, score, num_comments, upvote_ratio,
-                1 - (embedding <=> CAST(:query_embedding AS vector)) as similarity
+        embedding_list = []
+        for num in query_embedding:
+            embedding_list.append(str(num))
+        query_embedding_str = '[' + ','.join(embedding_list) + ']'
+
+        sql_query = """
+            SELECT id, post_id, title, text, full_text, source, date,
+                   post_link, score, num_comments, upvote_ratio
             FROM posts
             WHERE embedding IS NOT NULL
             ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :k
-        """)
+        """
 
         with engine.connect() as conn:
             results = conn.execute(
-                sql,
+                text(sql_query),
                 {
                     "query_embedding": query_embedding_str,
                     "k": self.k
@@ -63,10 +61,12 @@ class PgVectorRetriever(BaseRetriever):
             ).fetchall()
 
         documents = []
+
         for row in results:
             content = f"Title: {row.title}\n\nPost: {row.text}"
 
             comments = self.db.query(Comment).filter(Comment.post_id == row.post_id).limit(10).all()
+
             if comments:
                 content += "\n\nComments and Responses:"
                 for comment in comments:
@@ -81,7 +81,8 @@ class PgVectorRetriever(BaseRetriever):
                 'url': row.post_link
             }
 
-            documents.append(Document(page_content=content, metadata=metadata))
+            doc = Document(page_content=content, metadata=metadata)
+            documents.append(doc)
 
         return documents
 
