@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
+from pgvector.sqlalchemy import Vector
 from datetime import datetime
 
 Base = declarative_base()
@@ -19,6 +20,7 @@ class Post(Base):
     score = Column(Integer, default=0)
     num_comments = Column(Integer, default=0)
     upvote_ratio = Column(Float, default=0.0)
+    embedding = Column(Vector(384))
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -31,5 +33,6 @@ class Comment(Base):
     date = Column(String)
     comment_link = Column(String)
     post_id = Column(String, ForeignKey("posts.post_id"), nullable=False, index=True)
+    embedding = Column(Vector(384))
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -40,12 +40,14 @@ Required packages:
 ### Quick Start
 
 1. **Install dependencies:**
+
    ```bash
    cd backend
    pip install -r requirements.txt
    ```
 
 2. **Create PostgreSQL database:**
+
    ```bash
    psql -U postgres
    CREATE DATABASE career_db;
@@ -53,6 +55,7 @@ Required packages:
    ```
 
 3. **Create `.env` file in `backend/` directory:**
+
    ```bash
    cd backend
    echo "DATABASE_URL=postgresql://postgres:your_password@localhost:5432/career_db" > .env
@@ -66,6 +69,7 @@ Required packages:
    ```
 
 That's it! The script will automatically:
+
 - Create the database tables
 - Collect Reddit data
 - Clean and filter the data
@@ -85,6 +89,7 @@ pip install -r requirements.txt
 #### 2. Set Up PostgreSQL
 
 **Option A: Using psql**
+
 ```bash
 psql -U postgres
 CREATE DATABASE career_db;
@@ -92,11 +97,13 @@ CREATE DATABASE career_db;
 ```
 
 **Option B: Using command line**
+
 ```bash
 createdb -U postgres career_db
 ```
 
 **Option C: Using Docker**
+
 ```bash
 docker run --name postgres-career \
   -e POSTGRES_PASSWORD=password \
@@ -114,6 +121,7 @@ DATABASE_URL=postgresql://username:password@localhost:5432/career_db
 ```
 
 **Example:**
+
 ```env
 DATABASE_URL=postgresql://postgres:mypassword@localhost:5432/career_db
 ```
@@ -300,6 +308,29 @@ The script automatically skips existing posts/comments based on `post_id` and `c
 
 Make sure you're running the script from the `backend/` directory or have the correct Python path set up.
 
+### pgvector Extension Error
+
+If you see an error like "could not open extension control file" or "type vector does not exist":
+
+1. **Check if pgvector is installed:**
+
+   ```bash
+   psql -U postgres -d career_db -c "SELECT * FROM pg_available_extensions WHERE name = 'vector';"
+   ```
+
+2. **If not installed, install it** (see Prerequisites section above)
+
+3. **After installing, create the extension manually:**
+
+   ```bash
+   psql -U postgres -d career_db -c "CREATE EXTENSION vector;"
+   ```
+
+4. **Then run your script again:**
+   ```bash
+   python scripts/save_to_database.py
+   ```
+
 ## File Structure
 
 ```
@@ -311,6 +342,135 @@ backend/
 ├── scripts/
 │   ├── collect_reddit_public.py  # Reddit scraper
 │   ├── clean_data.py             # Data cleaning
-│   └── save_to_database.py       # Main script
+│   ├── save_to_database.py       # Main script
+│   └── generate_embeddings.py    # Generate embeddings for pgvector
 └── .env                    # Environment variables
 ```
+
+## Vector Search with pgvector
+
+The database uses pgvector for semantic search. Embeddings are stored directly in the posts and comments tables as vector columns.
+
+### How It Works
+
+1. **Posts table** has an `embedding` column that stores the combined embedding of:
+
+   - Post title
+   - Post text
+   - Related comments (up to 10 comments per post)
+
+2. **Comments table** also has an `embedding` column for individual comment embeddings
+
+3. When searching, the system:
+   - Converts your question to an embedding
+   - Uses pgvector SQL functions to find similar posts
+   - Returns posts with the most relevant combined content
+
+### Why Combine Posts with Comments
+
+- Better context for the LLM
+- Simpler search (one table instead of two)
+- Better semantic understanding
+- Full discussion context in one embedding
+
+### Generating Embeddings
+
+After saving data to PostgreSQL, generate embeddings:
+
+```bash
+cd backend
+source .venv/bin/activate
+python scripts/generate_embeddings.py
+```
+
+### What the Script Does
+
+1. Loads all posts from PostgreSQL
+2. For each post, combines it with up to 10 comments
+3. Generates one embedding for the combined content
+4. Stores the embedding in the `posts.embedding` column
+5. Also generates embeddings for individual comments (stored in `comments.embedding`)
+
+### Expected Output
+
+```
+============================================================
+Generating embeddings for posts and comments
+============================================================
+
+1. Generating embeddings for posts (with combined comments)...
+Processing 75 posts...
+Updated 10 posts...
+Updated 20 posts...
+Generated embeddings for 75 posts
+Processing 1200 comments...
+Updated 50 comments...
+Updated 100 comments...
+Generated embeddings for 1200 comments
+
+============================================================
+Complete!
+============================================================
+```
+
+### Prerequisites
+
+1. **Install pgvector Python package:**
+
+   ```bash
+   pip install pgvector
+   ```
+
+2. **Install pgvector PostgreSQL extension:**
+
+   You need to install the pgvector extension in your PostgreSQL database. The method depends on your system:
+
+   **Ubuntu/Debian:**
+
+   ```bash
+   sudo apt-get install postgresql-14-pgvector
+   # or for PostgreSQL 15:
+   sudo apt-get install postgresql-15-pgvector
+   ```
+
+   **macOS (using Homebrew):**
+
+   ```bash
+   brew install pgvector
+   ```
+
+   **From source:**
+
+   ```bash
+   git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git
+   cd pgvector
+   make
+   sudo make install
+   ```
+
+   **Or using Docker:**
+   Use a PostgreSQL image with pgvector pre-installed:
+
+   ```bash
+   docker run --name postgres-career \
+     -e POSTGRES_PASSWORD=password \
+     -e POSTGRES_DB=career_db \
+     -p 5432:5432 \
+     -d pgvector/pgvector:pg14
+   ```
+
+   After installing, the extension will be automatically created when you run `init_db()`.
+
+### Running Multiple Times
+
+You can run the embedding script again after adding new posts/comments. It will only generate embeddings for posts and comments that don't have them yet.
+
+### How Search Works
+
+When you ask a question:
+
+1. Your question is converted to an embedding
+2. PostgreSQL searches the `posts` table using pgvector's `<=>` operator (cosine distance)
+3. Returns the top K most similar posts
+4. The retrieved posts already contain the full context (post + comments)
+5. The LLM uses this context to generate an answer

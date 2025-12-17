@@ -4,25 +4,19 @@ from dotenv import load_dotenv
 
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.documents import Document
 from langchain_groq import ChatGroq
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database.db import SessionLocal, engine
+from database.models import Post, Comment
 
-# --------------------------------------------------
-# ENV
-# --------------------------------------------------
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Go up 2 levels from services/ to backend/, then into data/faiss_index
-BACKEND_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
-FAISS_DIR = os.path.join(BACKEND_DIR, "data", "faiss_index")
 
-# --------------------------------------------------
-# INITIALIZATION FUNCTIONS
-# --------------------------------------------------
 def load_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
@@ -31,16 +25,65 @@ def load_embeddings():
     )
 
 
+class PgVectorRetriever:
+    def __init__(self, embeddings, k=5):
+        self.embeddings = embeddings
+        self.k = k
+        self.db = SessionLocal()
+
+    def get_relevant_documents(self, query: str):
+        query_embedding = self.embeddings.embed_query(query)
+        query_embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
+
+        sql = text("""
+            SELECT
+                id, post_id, title, text, full_text, source, date,
+                post_link, score, num_comments, upvote_ratio,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) as similarity
+            FROM posts
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :k
+        """)
+
+        with engine.connect() as conn:
+            results = conn.execute(
+                sql,
+                {
+                    "query_embedding": query_embedding_str,
+                    "k": self.k
+                }
+            ).fetchall()
+
+        documents = []
+        for row in results:
+            content = f"Title: {row.title}\n\nPost: {row.text}"
+
+            comments = self.db.query(Comment).filter(Comment.post_id == row.post_id).limit(10).all()
+            if comments:
+                content += "\n\nComments and Responses:"
+                for comment in comments:
+                    content += f"\n{comment.text}"
+
+            metadata = {
+                'post_id': row.post_id,
+                'source': row.source,
+                'date': row.date,
+                'score': row.score,
+                'num_comments': row.num_comments,
+                'url': row.post_link
+            }
+
+            documents.append(Document(page_content=content, metadata=metadata))
+
+        return documents
+
+    def __call__(self, query: str):
+        return self.get_relevant_documents(query)
+
+
 def load_retriever(embeddings, k: int = 5):
-    db = FAISS.load_local(
-        folder_path=FAISS_DIR,
-        embeddings=embeddings,
-        allow_dangerous_deserialization=True
-    )
-    return db.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": k}
-    )
+    return PgVectorRetriever(embeddings, k)
 
 
 def load_llm():
@@ -103,7 +146,6 @@ def ask_question(
 
     answer = result["answer"]
 
-    # Extract source documents from the result
     sources = []
     if "context" in result:
         seen_urls = set()
