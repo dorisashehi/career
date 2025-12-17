@@ -8,11 +8,13 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
 from langchain_groq import ChatGroq
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database.db import SessionLocal, engine
 from database.models import Post, Comment
+from typing import Any
 
 load_dotenv()
 
@@ -25,13 +27,18 @@ def load_embeddings():
     )
 
 
-class PgVectorRetriever:
-    def __init__(self, embeddings, k=5):
-        self.embeddings = embeddings
-        self.k = k
-        self.db = SessionLocal()
+class PgVectorRetriever(BaseRetriever):
+    embeddings: Any
+    k: int = 5
+    db: Any = None
 
-    def get_relevant_documents(self, query: str):
+    model_config = {"arbitrary_types_allowed": True}
+
+    def __init__(self, embeddings, k=5, **kwargs):
+        db = SessionLocal()
+        super().__init__(embeddings=embeddings, k=k, db=db, **kwargs)
+
+    def _get_relevant_documents(self, query: str):
         query_embedding = self.embeddings.embed_query(query)
         query_embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
 
@@ -77,9 +84,6 @@ class PgVectorRetriever:
             documents.append(Document(page_content=content, metadata=metadata))
 
         return documents
-
-    def __call__(self, query: str):
-        return self.get_relevant_documents(query)
 
 
 def load_retriever(embeddings, k: int = 5):

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from services.rag_service import build_rag_chain, ask_question
+from app.services.rag_service import build_rag_chain, ask_question
 from pydantic import BaseModel
 from typing import List, Optional
 

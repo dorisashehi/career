@@ -474,3 +474,35 @@ When you ask a question:
 3. Returns the top K most similar posts
 4. The retrieved posts already contain the full context (post + comments)
 5. The LLM uses this context to generate an answer
+
+### How it works
+
+# When the app starts (line 21 in main.py):
+
+- build_rag_chain() is called once
+- This loads the embedding model (sentence-transformers)
+- Creates the retriever with the embedding model
+- The embedding model stays in memory
+
+# When the API is called (user asks a question):
+
+- User sends a question to /ask endpoint
+- ask_question() is called with the question
+- Inside PgVectorRetriever.get_relevant_documents() (line 35):
+  - Generates an embedding for the user's question
+  - Uses pgvector SQL to search the posts table
+  - Compares the question embedding with stored post embeddings
+  - Returns the most similar posts
+
+### Important points:
+
+- Post embeddings are generated once by generate_embeddings.py and stored in the database
+- The question embedding is generated on each API call
+- The embedding model (sentence-transformers) is loaded once at startup and reused
+- No need to regenerate post embeddings on each API call; they're already in the database
+
+### Flow summary:
+
+App starts → Load embedding model (once)User asks question → Generate question embedding → Search stored post embeddings → Return similar posts
+
+So embeddings are used for every API call, but only the question embedding is generated each time. Post embeddings are pre-computed and stored.
