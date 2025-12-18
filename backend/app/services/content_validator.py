@@ -6,6 +6,7 @@ from transformers import pipeline
 
 
 toxicity_pipeline = None
+relevance_pipeline = None
 
 
 # This function builds simple keyword lists
@@ -42,22 +43,7 @@ def _get_keywords() -> Dict[str, List[str]]:
             "affiliate",
             "sign up here",
             "dm me",
-        ],
-        "career": [
-            "job",
-            "interview",
-            "offer",
-            "resume",
-            "cv",
-            "project",
-            "internship",
-            "software",
-            "developer",
-            "engineer",
-            "junior",
-            "senior",
-            "manager",
-        ],
+        ]
     }
 
 
@@ -70,6 +56,15 @@ def _get_toxicity_pipeline():
         )
     return toxicity_pipeline
 
+
+def _get_relevance_pipeline():
+    global relevance_pipeline
+    if relevance_pipeline is None:
+        relevance_pipeline = pipeline(
+            "zero-shot-classification",
+            model="facebook/bart-large-mnli",
+        )
+    return relevance_pipeline
 
 # This function checks for safety and policy problems
 def check_safety(text: str) -> Dict:
@@ -189,23 +184,51 @@ def check_spam(text: str) -> Dict:
 
 # This function checks if the text is career related or off-topic
 def check_relevance(text: str) -> Dict:
-    keywords = _get_keywords()
+    clf = _get_relevance_pipeline()
+
+    labels = [
+        "career or job experience in tech",
+        "interview preparation or job search",
+        "professional growth or learning",
+        "unrelated personal topic",
+        "advertising or promotion",
+    ]
+
+    result = clf(
+        text[:512],
+        candidate_labels=labels,
+        hypothesis_template="This text is about {}.",
+    )
+
+    scores = dict(zip(result["labels"], result["scores"]))
+
+    career_score = max(
+        scores.get("career or job experience in tech", 0),
+        scores.get("interview preparation or job search", 0),
+        scores.get("professional growth or learning", 0),
+    )
+
     lowered = text.lower()
+    career_keywords = [
+        "job", "work", "career", "internship", "interview",
+        "resume", "cv", "promotion", "manager", "software engineer",
+        "developer", "programmer", "data scientist", "tech company",
+        "startup", "team lead", "product manager",
+    ]
+    has_career_words = any(word in lowered for word in career_keywords)
 
-    has_career_word = any(word in lowered for word in keywords["career"])
+    off_topic = (career_score < 0.45) or (not has_career_words)
 
-    off_topic = False
-    reasons = []
-
-    if not has_career_word:
-        off_topic = True
+    reasons: List[str] = []
+    if not has_career_words:
         reasons.append("may be off-topic (no career-related words found)")
+    elif off_topic:
+        reasons.append(f"may be off-topic (career relevance score {career_score:.2f})")
 
     return {
         "is_off_topic": off_topic,
         "reasons": reasons,
     }
-
 
 # This function runs all checks and builds a final decision
 def validate_experience(text: str) -> Dict:

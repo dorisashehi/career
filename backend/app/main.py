@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.rag_service import build_rag_chain, ask_question
 from app.services.content_validator import validate_experience
@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from database.db import get_db
+from database.db import get_db, SessionLocal
 from database.models import UserExperience
 from datetime import datetime
 
@@ -64,6 +64,37 @@ class ExperienceResponse(BaseModel):
     status: str
     message: str
 
+
+def run_experience_validation(experience_id: int, original_text: str) -> None:
+    """
+    Perform NLP validation in the background and update the saved experience.
+    This is intentionally best-effort and should never block the main request.
+    """
+    db = SessionLocal()
+    try:
+        validation = validate_experience(original_text.strip())
+
+        experience = (
+            db.query(UserExperience)
+            .filter(UserExperience.id == experience_id)
+            .first()
+        )
+
+        if not experience:
+            return
+
+        experience.text = validation["cleaned_text"]
+        experience.status = validation["status"]
+        experience.flagged_reason = validation["flagged_reason"]
+        experience.flagged_at = validation["flagged_at"] if validation["flagged_at"] else None
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Background validation error for experience {experience_id}: {e}")
+    finally:
+        db.close()
+
 # ---------------------------
 # Helpers
 # ---------------------------
@@ -95,7 +126,11 @@ def ask(payload: AskRequest):
 
 
 @app.post("/api/experiences", response_model=ExperienceResponse)
-def submit_experience(experience: ExperienceRequest, db: Session = Depends(get_db)):
+def submit_experience(
+    experience: ExperienceRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     try:
         if not experience.category or not experience.description:
             raise HTTPException(status_code=400, detail="Category and description are required")
@@ -116,25 +151,29 @@ def submit_experience(experience: ExperienceRequest, db: Session = Depends(get_d
 
         experience_type = category_map.get(experience.category, "other")
 
-        validation = validate_experience(experience.description.strip())
-        cleaned_text = validation["cleaned_text"]
+        original_text = experience.description.strip()
 
-        title_source = cleaned_text if cleaned_text else experience.description.strip()
+        # Build a short title from the raw text so we can respond quickly.
+        title_source = original_text
         title = title_source[:100] + "..." if len(title_source) > 100 else title_source
 
         new_experience = UserExperience(
             title=title,
-            text=cleaned_text,
+            text=original_text,
             experience_type=experience_type,
-            status=validation["status"],
-            flagged_reason=validation["flagged_reason"],
-            flagged_at=validation["flagged_at"] if validation["flagged_at"] else None,
             submitted_at=datetime.utcnow(),
         )
 
         db.add(new_experience)
         db.commit()
         db.refresh(new_experience)
+
+        # Trigger validation in the background so the response is fast.
+        background_tasks.add_task(
+            run_experience_validation,
+            experience_id=new_experience.id,
+            original_text=original_text,
+        )
 
         return {
             "id": new_experience.id,
