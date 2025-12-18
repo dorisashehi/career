@@ -52,7 +52,9 @@ def _get_toxicity_pipeline():
     if toxicity_pipeline is None:
         toxicity_pipeline = pipeline(
             "text-classification",
-            model="unitary/toxic-bert",
+            # Smaller, faster toxicity model (vs large BERT variants)
+            model="SkolkovoInstitute/roberta_toxicity_classifier",
+            truncation=True,
         )
     return toxicity_pipeline
 
@@ -62,7 +64,9 @@ def _get_relevance_pipeline():
     if relevance_pipeline is None:
         relevance_pipeline = pipeline(
             "zero-shot-classification",
-            model="facebook/bart-large-mnli",
+            # Distilled MNLI model: ~3–6× faster than bart-large-mnli
+            model="valhalla/distilbart-mnli-12-3",
+            truncation=True,
         )
     return relevance_pipeline
 
