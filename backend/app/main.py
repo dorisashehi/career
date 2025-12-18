@@ -1,12 +1,14 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.rag_service import build_rag_chain, ask_question
+from app.services.content_validator import validate_experience
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from database.db import get_db, init_db
+from database.db import get_db
 from database.models import UserExperience
+from datetime import datetime
 
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -114,13 +116,20 @@ def submit_experience(experience: ExperienceRequest, db: Session = Depends(get_d
 
         experience_type = category_map.get(experience.category, "other")
 
-        title = experience.description[:100] + "..." if len(experience.description) > 100 else experience.description
+        validation = validate_experience(experience.description.strip())
+        cleaned_text = validation["cleaned_text"]
+
+        title_source = cleaned_text if cleaned_text else experience.description.strip()
+        title = title_source[:100] + "..." if len(title_source) > 100 else title_source
 
         new_experience = UserExperience(
             title=title,
-            text=experience.description.strip(),
+            text=cleaned_text,
             experience_type=experience_type,
-            status="pending"
+            status=validation["status"],
+            flagged_reason=validation["flagged_reason"],
+            flagged_at=validation["flagged_at"] if validation["flagged_at"] else None,
+            submitted_at=datetime.utcnow(),
         )
 
         db.add(new_experience)

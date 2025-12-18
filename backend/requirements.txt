@@ -18,6 +18,7 @@ python-dotenv==1.0.0
 sentence-transformers>=5.2.0  # Updated for compatibility
 # Note: Install PyTorch CPU version separately first to save space:
 # pip install torch --index-url https://download.pytorch.org/whl/cpu
+transformers
 fastapi
 pydantic
 typing
