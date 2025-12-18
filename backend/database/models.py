@@ -49,6 +49,7 @@ class UserExperience(Base):
     status = Column(String, default="pending")  # "pending", "approved", "rejected"
     flagged_reason = Column(Text)  # Why it was flagged (bad words, negative sentiment, etc.)
     flagged_at = Column(DateTime)
+    severity = Column(String)  # "critical", "medium", "low", or None
 
     # Embedding (same as posts)
     embedding = Column(Vector(384))

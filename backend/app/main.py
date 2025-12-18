@@ -85,6 +85,7 @@ def run_experience_validation(experience_id: int, original_text: str) -> None:
 
         experience.text = validation["cleaned_text"]
         experience.status = validation["status"]
+        experience.severity = validation["severity"]
         experience.flagged_reason = validation["flagged_reason"]
         experience.flagged_at = validation["flagged_at"] if validation["flagged_at"] else None
 
