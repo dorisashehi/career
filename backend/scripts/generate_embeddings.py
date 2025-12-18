@@ -1,28 +1,35 @@
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from database.db import SessionLocal
-from database.models import Post, Comment
+from database.models import Post, Comment, UserExperience
 from langchain_huggingface import HuggingFaceEmbeddings
 
 
 def get_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": True},
     )
 
 
-def combine_post_with_comments(db: Session, post: Post, max_comments=10):
+def combine_post_with_comments(db: Session, post: Post, max_comments: int = 10) -> str:
     content_parts = [
         f"Title: {post.title}",
-        f"\nPost: {post.text}"
+        f"\nPost: {post.text}",
     ]
 
-    comments = db.query(Comment).filter(Comment.post_id == post.post_id).limit(max_comments).all()
+    comments = (
+        db.query(Comment)
+        .filter(Comment.post_id == post.post_id)
+        .limit(max_comments)
+        .all()
+    )
 
     if comments:
         content_parts.append("\n\nComments and Responses:")
@@ -33,7 +40,7 @@ def combine_post_with_comments(db: Session, post: Post, max_comments=10):
     return full_content
 
 
-def generate_embeddings():
+def generate_post_and_comment_embeddings():
     embeddings = get_embeddings()
     db = SessionLocal()
 
@@ -78,13 +85,63 @@ def generate_embeddings():
         db.close()
 
 
+def generate_user_experience_embeddings(status_filter: str = "approved"):
+    """
+    Generate embeddings for user experiences that have passed validation / review.
+
+    By default we only embed rows whose `status` is \"approved\" and whose
+    `embedding` column is currently NULL.
+    """
+    embeddings = get_embeddings()
+    db = SessionLocal()
+
+    try:
+        query = db.query(UserExperience).filter(UserExperience.embedding.is_(None))
+
+        if status_filter:
+            query = query.filter(UserExperience.status == status_filter)
+
+        experiences = query.all()
+        print(
+            f"Processing {len(experiences)} user experiences "
+            f"(status = '{status_filter}' if set)..."
+        )
+
+        updated = 0
+        for exp in experiences:
+            # `text` already contains cleaned / validated content
+            if not exp.text:
+                continue
+
+            embedding = embeddings.embed_query(exp.text)
+            exp.embedding = embedding
+            updated += 1
+
+            if updated % 25 == 0:
+                db.commit()
+                print(f"Updated {updated} user experiences...")
+
+        # If table is empty or nothing matched the filter, this is still safe.
+        db.commit()
+        if updated == 0:
+            print("No user experiences needed embeddings.")
+        else:
+            print(f"Generated embeddings for {updated} user experiences")
+
+    finally:
+        db.close()
+
+
 def main():
     print("=" * 60)
-    print("Generating embeddings for posts and comments")
+    print("Generating embeddings for posts, comments, and user experiences")
     print("=" * 60)
 
     print("\n1. Generating embeddings for posts (with combined comments)...")
-    generate_embeddings()
+    generate_post_and_comment_embeddings()
+
+    print("\n2. Generating embeddings for user experiences (approved only)...")
+    generate_user_experience_embeddings(status_filter="approved")
 
     print("\n" + "=" * 60)
     print("Complete!")

@@ -46,7 +46,7 @@ class UserExperience(Base):
     experience_type = Column(String)  # "interview", "job_search", "career_advice", etc.
 
     # Status workflow
-    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    status = Column(String, default="approved")  # "pending", "approved", "rejected"
     flagged_reason = Column(Text)  # Why it was flagged (bad words, negative sentiment, etc.)
     flagged_at = Column(DateTime)
     severity = Column(String)  # "critical", "medium", "low", or None

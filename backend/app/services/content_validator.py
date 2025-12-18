@@ -263,12 +263,12 @@ def validate_experience(text: str) -> Dict:
         severity = "medium"
         status = "pending"
         flagged_at = now
-    elif pii_result["had_pii"]:
-        severity = "medium"
-        status = "pending"
-        flagged_at = now
     elif relevance_result["is_off_topic"]:
         severity = "low"
+        status = "pending"
+        flagged_at = now
+    elif pii_result["had_pii"]:
+        severity = "medium"
         status = "pending"
         flagged_at = now
 
