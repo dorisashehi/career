@@ -1,13 +1,13 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { loginAdmin } from "@/lib/api";
-import { saveAdminToken } from "@/lib/auth";
+import { saveAdminToken, isAdminLoggedIn } from "@/lib/auth";
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
@@ -15,6 +15,13 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Redirect to admin dashboard if already logged in
+  useEffect(() => {
+    if (isAdminLoggedIn()) {
+      router.push("/admin");
+    }
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

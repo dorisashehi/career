@@ -41,18 +41,7 @@ type Advice = {
 export default function AdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"flagged" | "advice">("flagged");
-
-  // Check if admin is logged in when component loads
-  useEffect(() => {
-    if (!isAdminLoggedIn()) {
-      router.push("/admin/login");
-    }
-  }, [router]);
-
-  const handleLogout = () => {
-    removeAdminToken();
-    router.push("/admin/login");
-  };
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [flaggedContent, setFlaggedContent] = useState<FlaggedContent[]>([
     {
       id: "1",
@@ -128,6 +117,34 @@ export default function AdminDashboard() {
       effectivenessScore: 4.7,
     },
   ]);
+
+  // Check if admin is logged in when component loads
+  useEffect(() => {
+    const checkAuth = () => {
+      if (!isAdminLoggedIn()) {
+        router.push("/admin/login");
+        setIsAuthenticated(false);
+      } else {
+        setIsAuthenticated(true);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
+  const handleLogout = () => {
+    removeAdminToken();
+    router.push("/admin/login");
+  };
+
+  // Show nothing (or loading) while checking authentication
+  if (isAuthenticated === null || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   const handleApprove = (id: string) => {
     setFlaggedContent((prev) =>
