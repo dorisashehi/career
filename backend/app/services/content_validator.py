@@ -252,9 +252,11 @@ def validate_experience(text: str) -> Dict:
     all_reasons.extend(relevance_result["reasons"])
 
     severity = None
-    status = "pending"
+    # Default to approved - only set to pending if there are issues
+    status = "approved"
     flagged_at = None
 
+    # Check if there are any issues that need review
     if safety_result["is_critical"]:
         severity = "critical"
         status = "pending"
