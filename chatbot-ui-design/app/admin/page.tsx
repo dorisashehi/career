@@ -17,16 +17,11 @@ import {
   LogOut,
 } from "lucide-react";
 import { getAdminToken, removeAdminToken, isAdminLoggedIn } from "@/lib/auth";
+import { getPendingExperiences, ExperienceListItem } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
-type FlaggedContent = {
-  id: string;
-  type: "post" | "comment";
-  author: string;
-  content: string;
-  reason: string;
-  timestamp: string;
-  status: "pending" | "approved" | "rejected";
-};
+// We'll use ExperienceListItem from the API instead of FlaggedContent
 
 type Advice = {
   id: string;
@@ -42,38 +37,61 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"flagged" | "advice">("flagged");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [flaggedContent, setFlaggedContent] = useState<FlaggedContent[]>([
-    {
-      id: "1",
-      type: "post",
-      author: "user_john_doe",
-      content:
-        "This company is terrible and I would never recommend working there. The management is awful.",
-      reason: "Inappropriate language",
-      timestamp: "2 hours ago",
-      status: "pending",
-    },
-    {
-      id: "2",
-      type: "comment",
-      author: "career_seeker_23",
-      content:
-        "You should definitely lie on your resume about your experience to get the job.",
-      reason: "Unethical advice",
-      timestamp: "5 hours ago",
-      status: "pending",
-    },
-    {
-      id: "3",
-      type: "post",
-      author: "professional_mike",
-      content:
-        "Looking for advice on negotiating salary for a senior developer position.",
-      reason: "Flagged by mistake",
-      timestamp: "1 day ago",
-      status: "pending",
-    },
-  ]);
+  const [flaggedContent, setFlaggedContent] = useState<ExperienceListItem[]>(
+    []
+  );
+  const [loading, setLoading] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
+
+  // Fetch pending experiences when component loads and user is authenticated
+  useEffect(() => {
+    const fetchExperiences = async () => {
+      if (!isAuthenticated) return;
+
+      setLoading(true);
+      try {
+        const token = getAdminToken();
+        if (!token) {
+          // No token found, redirect to login
+          removeAdminToken();
+          router.push("/admin/login");
+          return;
+        }
+
+        const experiences = await getPendingExperiences(token, "pending");
+        setFlaggedContent(experiences);
+      } catch (error: any) {
+        // Check if it's a token expiration error (401 status)
+        if (
+          error?.status === 401 ||
+          (error instanceof Error &&
+            (error.message.includes("expired") ||
+              error.message.includes("Invalid or expired token") ||
+              error.message.includes("401")))
+        ) {
+          // Token expired or invalid, remove it and redirect to login immediately
+          removeAdminToken();
+          setIsAuthenticated(false);
+          router.push("/admin/login");
+          return;
+        }
+
+        // For other errors, show notification
+        if (error instanceof Error) {
+          toast({
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExperiences();
+  }, [isAuthenticated, router, toast]);
 
   const [adviceLibrary, setAdviceLibrary] = useState<Advice[]>([
     {
@@ -120,13 +138,16 @@ export default function AdminDashboard() {
 
   // Check if admin is logged in when component loads
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       if (!isAdminLoggedIn()) {
         router.push("/admin/login");
         setIsAuthenticated(false);
-      } else {
-        setIsAuthenticated(true);
+        return;
       }
+
+      // Token exists, but we should verify it's still valid
+      // We'll verify it when fetching experiences
+      setIsAuthenticated(true);
     };
 
     checkAuth();
@@ -146,20 +167,45 @@ export default function AdminDashboard() {
     );
   }
 
-  const handleApprove = (id: string) => {
-    setFlaggedContent((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status: "approved" } : item
-      )
-    );
+  // Toggle expand/collapse for long text
+  const toggleExpand = (id: number) => {
+    setExpandedItems((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
-  const handleReject = (id: string) => {
-    setFlaggedContent((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status: "rejected" } : item
-      )
-    );
+  // Check if text is long enough to need expand/collapse
+  const isLongText = (text: string) => {
+    return text.length > 200;
+  };
+
+  // Get preview text (first 200 characters)
+  const getPreviewText = (text: string) => {
+    return text.substring(0, 200) + "...";
+  };
+
+  const handleApprove = (id: number) => {
+    // TODO: Call backend API to approve
+    setFlaggedContent((prev) => prev.filter((item) => item.id !== id));
+    toast({
+      title: "Approved",
+      description: "Experience has been approved.",
+    });
+  };
+
+  const handleReject = (id: number) => {
+    // TODO: Call backend API to reject
+    setFlaggedContent((prev) => prev.filter((item) => item.id !== id));
+    toast({
+      title: "Rejected",
+      description: "Experience has been rejected.",
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -171,6 +217,36 @@ export default function AdminDashboard() {
       default:
         return "text-yellow-600 bg-yellow-50";
     }
+  };
+
+  // Get severity color
+  const getSeverityColor = (severity: string | null) => {
+    if (!severity) return "text-gray-600 bg-gray-50";
+    switch (severity.toLowerCase()) {
+      case "critical":
+        return "text-red-600 bg-red-50";
+      case "medium":
+        return "text-orange-600 bg-orange-50";
+      case "low":
+        return "text-yellow-600 bg-yellow-50";
+      default:
+        return "text-gray-600 bg-gray-50";
+    }
+  };
+
+  // Format date to show time ago
+  const formatTimeAgo = (dateString: string | null) => {
+    if (!dateString) return "Unknown";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600)
+      return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
   };
 
   return (
@@ -255,83 +331,137 @@ export default function AdminDashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-foreground">
-                Flagged Posts & Comments
+                Pending User Experiences
               </h2>
               <div className="flex gap-2">
                 <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-sm font-medium">
-                  {flaggedContent.filter((c) => c.status === "pending").length}{" "}
-                  Pending
+                  {flaggedContent.length} Pending
                 </span>
               </div>
             </div>
 
-            {flaggedContent.map((item) => (
-              <Card key={item.id} className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-2 py-1 text-xs font-medium uppercase ${
-                          item.type === "post"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-purple-100 text-purple-700"
-                        }`}
-                      >
-                        {item.type}
-                      </span>
-                      <span
-                        className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
-                          item.status
-                        )}`}
-                      >
-                        {item.status}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        by {item.author}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {item.timestamp}
-                      </span>
-                    </div>
+            {loading && (
+              <div className="text-center py-8 text-muted-foreground">
+                Loading experiences...
+              </div>
+            )}
 
-                    <p className="text-foreground leading-relaxed">
-                      {item.content}
-                    </p>
+            {!loading && flaggedContent.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No pending experiences to review.
+              </div>
+            )}
 
-                    <div className="flex items-center gap-2 text-sm">
-                      <Flag className="w-4 h-4 text-red-500" />
-                      <span className="text-muted-foreground">Reason:</span>
-                      <span className="text-red-600 font-medium">
-                        {item.reason}
-                      </span>
-                    </div>
-                  </div>
+            {!loading &&
+              flaggedContent.map((item) => {
+                const isExpanded = expandedItems.has(item.id);
+                const shouldShowExpand = isLongText(item.text);
+                const displayText =
+                  isExpanded || !shouldShowExpand
+                    ? item.text
+                    : getPreviewText(item.text);
 
-                  {item.status === "pending" && (
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleApprove(item.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-green-600 border-green-600 hover:bg-green-50"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Approve
-                      </Button>
-                      <Button
-                        onClick={() => handleReject(item.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 border-red-600 hover:bg-red-50"
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Reject
-                      </Button>
+                return (
+                  <Card key={item.id} className="p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {/* Show severity instead of type */}
+                          {item.severity && (
+                            <span
+                              className={`px-2 py-1 text-xs font-medium uppercase ${getSeverityColor(
+                                item.severity
+                              )}`}
+                            >
+                              {item.severity}
+                            </span>
+                          )}
+                          <span
+                            className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
+                              item.status
+                            )}`}
+                          >
+                            {item.status}
+                          </span>
+                          {item.experience_type && (
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+                              {item.experience_type.replace("_", " ")}
+                            </span>
+                          )}
+                          <span className="text-sm text-muted-foreground">
+                            {formatTimeAgo(item.submitted_at)}
+                          </span>
+                        </div>
+
+                        {item.title && (
+                          <h3 className="text-lg font-semibold text-foreground">
+                            {item.title}
+                          </h3>
+                        )}
+
+                        <div className="space-y-2">
+                          <p className="text-foreground leading-relaxed">
+                            {displayText}
+                          </p>
+                          {shouldShowExpand && (
+                            <button
+                              onClick={() => toggleExpand(item.id)}
+                              className="flex items-center gap-1 text-sm text-primary hover:underline"
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <ChevronUp className="w-4 h-4" />
+                                  Show less
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-4 h-4" />
+                                  Show more
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {item.flagged_reason && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Flag className="w-4 h-4 text-red-500" />
+                            <span className="text-muted-foreground">
+                              Reason:
+                            </span>
+                            <span className="text-red-600 font-medium">
+                              {item.flagged_reason}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {item.status === "pending" && (
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleApprove(item.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-green-600 border-green-600 hover:bg-green-50"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            onClick={() => handleReject(item.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-600 hover:bg-red-50"
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </Card>
-            ))}
+                  </Card>
+                );
+              })}
           </div>
         )}
 

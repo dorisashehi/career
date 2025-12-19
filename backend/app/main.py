@@ -376,6 +376,59 @@ def get_current_admin_info(admin: AdminUser = Depends(get_current_admin)):
     }
 
 
+class ExperienceListItem(BaseModel):
+    id: int
+    title: Optional[str]
+    text: str
+    experience_type: Optional[str]
+    status: str
+    severity: Optional[str]
+    flagged_reason: Optional[str]
+    flagged_at: Optional[str]
+    submitted_at: Optional[str]
+
+
+@app.get("/api/admin/experiences", response_model=List[ExperienceListItem])
+def get_pending_experiences(
+    status: str = "pending",
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Get experiences for admin review.
+    By default returns pending experiences, but you can filter by status.
+    """
+    try:
+        experiences = (
+            db.query(UserExperience)
+            .filter(UserExperience.status == status)
+            .order_by(UserExperience.submitted_at.desc())
+            .all()
+        )
+
+        result = []
+        for exp in experiences:
+            result.append({
+                "id": exp.id,
+                "title": exp.title,
+                "text": exp.text,
+                "experience_type": exp.experience_type,
+                "status": exp.status,
+                "severity": exp.severity,
+                "flagged_reason": exp.flagged_reason,
+                "flagged_at": exp.flagged_at.isoformat() if exp.flagged_at else None,
+                "submitted_at": exp.submitted_at.isoformat() if exp.submitted_at else None,
+            })
+
+        return result
+    except Exception as e:
+        print(f"Error fetching experiences: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch experiences",
+        ) from e
+
+
 @app.post("/api/experiences", response_model=ExperienceResponse)
 def submit_experience(
     experience: ExperienceRequest,

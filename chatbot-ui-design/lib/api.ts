@@ -49,6 +49,18 @@ export interface AdminInfo {
   created_at: string | null;
 }
 
+export interface ExperienceListItem {
+  id: number;
+  title: string | null;
+  text: string;
+  experience_type: string | null;
+  status: string;
+  severity: string | null;
+  flagged_reason: string | null;
+  flagged_at: string | null;
+  submitted_at: string | null;
+}
+
 // This function sends a question to the backend and gets an answer back
 export async function askQuestion(
   question: string,
@@ -211,6 +223,53 @@ export async function getCurrentAdminInfo(token: string): Promise<AdminInfo> {
     }
 
     const data: AdminInfo = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      if (
+        error.message.includes("fetch") ||
+        error.message.includes("Failed to fetch")
+      ) {
+        throw new Error(
+          "Cannot connect to backend. Make sure the backend server is running on port 8000."
+        );
+      }
+      throw error;
+    }
+    throw new Error("Something went wrong. Please try again.");
+  }
+}
+
+// Get pending experiences for admin review
+export async function getPendingExperiences(
+  token: string,
+  status: string = "pending"
+): Promise<ExperienceListItem[]> {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/admin/experiences?status=${status}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Throw error with 401 in message so we can detect it
+        const error = new Error(
+          "Invalid or expired token. Please login again."
+        );
+        (error as any).status = 401;
+        throw error;
+      }
+      throw new Error(`Failed to fetch experiences: ${response.status}`);
+    }
+
+    const data: ExperienceListItem[] = await response.json();
     return data;
   } catch (error) {
     if (error instanceof Error) {
