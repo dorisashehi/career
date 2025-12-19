@@ -439,116 +439,125 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {!loading &&
-              flaggedContent.map((item) => {
-                const isExpanded = expandedItems.has(item.id);
-                const shouldShowExpand = isLongText(item.text);
-                const displayText =
-                  isExpanded || !shouldShowExpand
-                    ? item.text
-                    : getPreviewText(item.text);
+            {!loading && flaggedContent.length > 0 && (
+              <div
+                className={`space-y-4 ${
+                  flaggedContent.length > 5
+                    ? "max-h-[1250px] overflow-y-auto pr-2"
+                    : ""
+                }`}
+              >
+                {flaggedContent.map((item) => {
+                  const isExpanded = expandedItems.has(item.id);
+                  const shouldShowExpand = isLongText(item.text);
+                  const displayText =
+                    isExpanded || !shouldShowExpand
+                      ? item.text
+                      : getPreviewText(item.text);
 
-                return (
-                  <Card key={item.id} className="p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          {/* Show severity instead of type */}
-                          {item.severity && (
+                  return (
+                    <Card key={item.id} className="p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {/* Show severity instead of type */}
+                            {item.severity && (
+                              <span
+                                className={`px-2 py-1 text-xs font-medium uppercase ${getSeverityColor(
+                                  item.severity
+                                )}`}
+                              >
+                                {item.severity}
+                              </span>
+                            )}
                             <span
-                              className={`px-2 py-1 text-xs font-medium uppercase ${getSeverityColor(
-                                item.severity
+                              className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
+                                item.status
                               )}`}
                             >
-                              {item.severity}
+                              {item.status}
                             </span>
-                          )}
-                          <span
-                            className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
-                              item.status
-                            )}`}
-                          >
-                            {item.status}
-                          </span>
-                          {item.experience_type && (
-                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
-                              {item.experience_type.replace("_", " ")}
+                            {item.experience_type && (
+                              <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+                                {item.experience_type.replace("_", " ")}
+                              </span>
+                            )}
+                            <span className="text-sm text-muted-foreground">
+                              {formatTimeAgo(item.submitted_at)}
                             </span>
+                          </div>
+
+                          {item.title && (
+                            <h3 className="text-lg font-semibold text-foreground">
+                              {item.title}
+                            </h3>
                           )}
-                          <span className="text-sm text-muted-foreground">
-                            {formatTimeAgo(item.submitted_at)}
-                          </span>
+
+                          <div className="space-y-2">
+                            <p className="text-foreground leading-relaxed">
+                              {displayText}
+                            </p>
+                            {shouldShowExpand && (
+                              <button
+                                onClick={() => toggleExpand(item.id)}
+                                className="flex items-center gap-1 text-sm text-primary hover:underline"
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="w-4 h-4" />
+                                    Show less
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-4 h-4" />
+                                    Show more
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {item.flagged_reason && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Flag className="w-4 h-4 text-red-500" />
+                              <span className="text-muted-foreground">
+                                Reason:
+                              </span>
+                              <span className="text-red-600 font-medium">
+                                {item.flagged_reason}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
-                        {item.title && (
-                          <h3 className="text-lg font-semibold text-foreground">
-                            {item.title}
-                          </h3>
-                        )}
-
-                        <div className="space-y-2">
-                          <p className="text-foreground leading-relaxed">
-                            {displayText}
-                          </p>
-                          {shouldShowExpand && (
-                            <button
-                              onClick={() => toggleExpand(item.id)}
-                              className="flex items-center gap-1 text-sm text-primary hover:underline"
+                        {item.status === "pending" && (
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleApprove(item.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-green-600 border-green-600 hover:bg-green-50"
                             >
-                              {isExpanded ? (
-                                <>
-                                  <ChevronUp className="w-4 h-4" />
-                                  Show less
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="w-4 h-4" />
-                                  Show more
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-
-                        {item.flagged_reason && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Flag className="w-4 h-4 text-red-500" />
-                            <span className="text-muted-foreground">
-                              Reason:
-                            </span>
-                            <span className="text-red-600 font-medium">
-                              {item.flagged_reason}
-                            </span>
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Approve
+                            </Button>
+                            <Button
+                              onClick={() => handleReject(item.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-600 hover:bg-red-50"
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              Reject
+                            </Button>
                           </div>
                         )}
                       </div>
-
-                      {item.status === "pending" && (
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => handleApprove(item.id)}
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 border-green-600 hover:bg-green-50"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            onClick={() => handleReject(item.id)}
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 border-red-600 hover:bg-red-50"
-                          >
-                            <XCircle className="w-4 h-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
