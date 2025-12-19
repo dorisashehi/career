@@ -17,7 +17,12 @@ import {
   LogOut,
 } from "lucide-react";
 import { getAdminToken, removeAdminToken, isAdminLoggedIn } from "@/lib/auth";
-import { getPendingExperiences, ExperienceListItem } from "@/lib/api";
+import {
+  getPendingExperiences,
+  approveExperience,
+  rejectExperience,
+  ExperienceListItem,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
@@ -190,22 +195,104 @@ export default function AdminDashboard() {
     return text.substring(0, 200) + "...";
   };
 
-  const handleApprove = (id: number) => {
-    // TODO: Call backend API to approve
-    setFlaggedContent((prev) => prev.filter((item) => item.id !== id));
-    toast({
-      title: "Approved",
-      description: "Experience has been approved.",
-    });
+  const handleApprove = async (id: number) => {
+    try {
+      const token = getAdminToken();
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "You are not logged in. Please login again.",
+          variant: "destructive",
+        });
+        router.push("/admin/login");
+        return;
+      }
+
+      // Call the backend API to approve the experience
+      await approveExperience(token, id);
+
+      // Remove the item from the list since it's now approved
+      setFlaggedContent((prev) => prev.filter((item) => item.id !== id));
+
+      toast({
+        title: "Approved",
+        description:
+          "Experience has been approved and status updated in database.",
+      });
+    } catch (error: any) {
+      // Check if it's a token expiration error
+      if (
+        error?.status === 401 ||
+        (error instanceof Error &&
+          (error.message.includes("expired") ||
+            error.message.includes("Invalid or expired token") ||
+            error.message.includes("401")))
+      ) {
+        removeAdminToken();
+        router.push("/admin/login");
+        return;
+      }
+
+      // Show error message
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to approve experience.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleReject = (id: number) => {
-    // TODO: Call backend API to reject
-    setFlaggedContent((prev) => prev.filter((item) => item.id !== id));
-    toast({
-      title: "Rejected",
-      description: "Experience has been rejected.",
-    });
+  const handleReject = async (id: number) => {
+    try {
+      const token = getAdminToken();
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "You are not logged in. Please login again.",
+          variant: "destructive",
+        });
+        router.push("/admin/login");
+        return;
+      }
+
+      // Call the backend API to reject the experience
+      await rejectExperience(token, id);
+
+      // Remove the item from the list since it's now rejected
+      setFlaggedContent((prev) => prev.filter((item) => item.id !== id));
+
+      toast({
+        title: "Rejected",
+        description:
+          "Experience has been rejected and status updated in database.",
+      });
+    } catch (error: any) {
+      // Check if it's a token expiration error
+      if (
+        error?.status === 401 ||
+        (error instanceof Error &&
+          (error.message.includes("expired") ||
+            error.message.includes("Invalid or expired token") ||
+            error.message.includes("401")))
+      ) {
+        removeAdminToken();
+        router.push("/admin/login");
+        return;
+      }
+
+      // Show error message
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to reject experience.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -362,27 +449,27 @@ export default function AdminDashboard() {
                     : getPreviewText(item.text);
 
                 return (
-              <Card key={item.id} className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-3">
+                  <Card key={item.id} className="p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-3 flex-wrap">
                           {/* Show severity instead of type */}
                           {item.severity && (
-                      <span
+                            <span
                               className={`px-2 py-1 text-xs font-medium uppercase ${getSeverityColor(
                                 item.severity
                               )}`}
-                      >
+                            >
                               {item.severity}
-                      </span>
+                            </span>
                           )}
                           <span
                             className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
                               item.status
                             )}`}
                           >
-                        {item.status}
-                      </span>
+                            {item.status}
+                          </span>
                           {item.experience_type && (
                             <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
                               {item.experience_type.replace("_", " ")}
@@ -391,7 +478,7 @@ export default function AdminDashboard() {
                           <span className="text-sm text-muted-foreground">
                             {formatTimeAgo(item.submitted_at)}
                           </span>
-                    </div>
+                        </div>
 
                         {item.title && (
                           <h3 className="text-lg font-semibold text-foreground">
@@ -424,42 +511,42 @@ export default function AdminDashboard() {
                         </div>
 
                         {item.flagged_reason && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Flag className="w-4 h-4 text-red-500" />
+                          <div className="flex items-center gap-2 text-sm">
+                            <Flag className="w-4 h-4 text-red-500" />
                             <span className="text-muted-foreground">
                               Reason:
                             </span>
                             <span className="text-red-600 font-medium">
                               {item.flagged_reason}
                             </span>
-                    </div>
+                          </div>
                         )}
-                  </div>
+                      </div>
 
-                  {item.status === "pending" && (
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleApprove(item.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-green-600 border-green-600 hover:bg-green-50"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Approve
-                      </Button>
-                      <Button
-                        onClick={() => handleReject(item.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 border-red-600 hover:bg-red-50"
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Reject
-                      </Button>
+                      {item.status === "pending" && (
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleApprove(item.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-green-600 border-green-600 hover:bg-green-50"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            onClick={() => handleReject(item.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-600 hover:bg-red-50"
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </Card>
+                  </Card>
                 );
               })}
           </div>

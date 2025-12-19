@@ -286,3 +286,99 @@ export async function getPendingExperiences(
     throw new Error("Something went wrong. Please try again.");
   }
 }
+
+// Approve a user experience
+export async function approveExperience(
+  token: string,
+  experienceId: number
+): Promise<void> {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/admin/experiences/${experienceId}/approve`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const error = new Error(
+          "Invalid or expired token. Please login again."
+        );
+        (error as any).status = 401;
+        throw error;
+      }
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: "Failed to approve experience" }));
+      throw new Error(
+        errorData.detail || `Failed to approve experience: ${response.status}`
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      if (
+        error.message.includes("fetch") ||
+        error.message.includes("Failed to fetch")
+      ) {
+        throw new Error(
+          "Cannot connect to backend. Make sure the backend server is running on port 8000."
+        );
+      }
+      throw error;
+    }
+    throw new Error("Something went wrong. Please try again.");
+  }
+}
+
+// Reject a user experience
+export async function rejectExperience(
+  token: string,
+  experienceId: number
+): Promise<void> {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/admin/experiences/${experienceId}/reject`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const error = new Error(
+          "Invalid or expired token. Please login again."
+        );
+        (error as any).status = 401;
+        throw error;
+      }
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: "Failed to reject experience" }));
+      throw new Error(
+        errorData.detail || `Failed to reject experience: ${response.status}`
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      if (
+        error.message.includes("fetch") ||
+        error.message.includes("Failed to fetch")
+      ) {
+        throw new Error(
+          "Cannot connect to backend. Make sure the backend server is running on port 8000."
+        );
+      }
+      throw error;
+    }
+    throw new Error("Something went wrong. Please try again.");
+  }
+}

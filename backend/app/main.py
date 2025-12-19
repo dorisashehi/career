@@ -429,6 +429,105 @@ def get_pending_experiences(
         ) from e
 
 
+@app.put("/api/admin/experiences/{experience_id}/approve")
+def approve_experience(
+    experience_id: int,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Approve a user experience. Changes status from pending to approved.
+    """
+    try:
+        # Find the experience in the database
+        experience = db.query(UserExperience).filter(UserExperience.id == experience_id).first()
+
+        # Check if experience exists
+        if not experience:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Experience not found"
+            )
+
+        # Update the status to approved
+        experience.status = "approved"
+        experience.approved_at = datetime.utcnow()
+
+        # Save changes to database
+        db.commit()
+
+        return {
+            "id": experience.id,
+            "status": experience.status,
+            "message": "Experience approved successfully"
+        }
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        print(f"Database error during approval: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred. Please try again later."
+        ) from e
+    except Exception as e:
+        db.rollback()
+        print(f"Unexpected error during approval: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please try again later."
+        ) from e
+
+
+@app.put("/api/admin/experiences/{experience_id}/reject")
+def reject_experience(
+    experience_id: int,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Reject a user experience. Changes status from pending to rejected.
+    """
+    try:
+        # Find the experience in the database
+        experience = db.query(UserExperience).filter(UserExperience.id == experience_id).first()
+
+        # Check if experience exists
+        if not experience:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Experience not found"
+            )
+
+        # Update the status to rejected
+        experience.status = "rejected"
+
+        # Save changes to database
+        db.commit()
+
+        return {
+            "id": experience.id,
+            "status": experience.status,
+            "message": "Experience rejected successfully"
+        }
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        print(f"Database error during rejection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred. Please try again later."
+        ) from e
+    except Exception as e:
+        db.rollback()
+        print(f"Unexpected error during rejection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please try again later."
+        ) from e
+
+
 @app.post("/api/experiences", response_model=ExperienceResponse)
 def submit_experience(
     experience: ExperienceRequest,
