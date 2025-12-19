@@ -188,6 +188,13 @@ def check_spam(text: str) -> Dict:
 
 # This function checks if the text is career related or off-topic
 def check_relevance(text: str) -> Dict:
+    # Strip surrounding quotes if the entire text is wrapped in quotes
+    # This helps detect quoted examples/resume content
+    cleaned_text = text.strip()
+    if (cleaned_text.startswith('"') and cleaned_text.endswith('"')) or \
+       (cleaned_text.startswith("'") and cleaned_text.endswith("'")):
+        cleaned_text = cleaned_text[1:-1].strip()
+
     clf = _get_relevance_pipeline()
 
     labels = [
@@ -198,8 +205,9 @@ def check_relevance(text: str) -> Dict:
         "advertising or promotion",
     ]
 
+    # Use cleaned text (without quotes) for classification
     result = clf(
-        text[:512],
+        cleaned_text[:512],
         candidate_labels=labels,
         hypothesis_template="This text is about {}.",
     )
@@ -212,7 +220,7 @@ def check_relevance(text: str) -> Dict:
         scores.get("professional growth or learning", 0),
     )
 
-    lowered = text.lower()
+    lowered = cleaned_text.lower()
     career_keywords = [
         "job", "work", "career", "internship", "interview",
         "resume", "cv", "promotion", "manager", "software engineer",
@@ -221,6 +229,8 @@ def check_relevance(text: str) -> Dict:
     ]
     has_career_words = any(word in lowered for word in career_keywords)
 
+    # 2. Career score is too low
+    # 3. No career-related words found
     off_topic = (career_score < 0.45) or (not has_career_words)
 
     reasons: List[str] = []

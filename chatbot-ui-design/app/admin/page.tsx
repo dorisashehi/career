@@ -362,27 +362,27 @@ export default function AdminDashboard() {
                     : getPreviewText(item.text);
 
                 return (
-                  <Card key={item.id} className="p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-3">
+              <Card key={item.id} className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-3 flex-wrap">
                           {/* Show severity instead of type */}
                           {item.severity && (
-                            <span
+                      <span
                               className={`px-2 py-1 text-xs font-medium uppercase ${getSeverityColor(
                                 item.severity
                               )}`}
-                            >
+                      >
                               {item.severity}
-                            </span>
+                      </span>
                           )}
                           <span
                             className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
                               item.status
                             )}`}
                           >
-                            {item.status}
-                          </span>
+                        {item.status}
+                      </span>
                           {item.experience_type && (
                             <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
                               {item.experience_type.replace("_", " ")}
@@ -391,7 +391,7 @@ export default function AdminDashboard() {
                           <span className="text-sm text-muted-foreground">
                             {formatTimeAgo(item.submitted_at)}
                           </span>
-                        </div>
+                    </div>
 
                         {item.title && (
                           <h3 className="text-lg font-semibold text-foreground">
@@ -424,42 +424,42 @@ export default function AdminDashboard() {
                         </div>
 
                         {item.flagged_reason && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Flag className="w-4 h-4 text-red-500" />
+                    <div className="flex items-center gap-2 text-sm">
+                      <Flag className="w-4 h-4 text-red-500" />
                             <span className="text-muted-foreground">
                               Reason:
                             </span>
                             <span className="text-red-600 font-medium">
                               {item.flagged_reason}
                             </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {item.status === "pending" && (
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => handleApprove(item.id)}
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 border-green-600 hover:bg-green-50"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            onClick={() => handleReject(item.id)}
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 border-red-600 hover:bg-red-50"
-                          >
-                            <XCircle className="w-4 h-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      )}
                     </div>
-                  </Card>
+                        )}
+                  </div>
+
+                  {item.status === "pending" && (
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleApprove(item.id)}
+                        variant="outline"
+                        size="sm"
+                        className="text-green-600 border-green-600 hover:bg-green-50"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => handleReject(item.id)}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-600 hover:bg-red-50"
+                      >
+                        <XCircle className="w-4 h-4 mr-1" />
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Card>
                 );
               })}
           </div>
