@@ -24,3 +24,5 @@ pydantic
 typing
 sqlalchemy
 psycopg2-binary
+python-jose[cryptography]
+bcrypt<4.0.0

@@ -1,19 +1,34 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.services.rag_service import build_rag_chain, ask_question
 from app.services.content_validator import validate_experience
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from database.db import get_db, SessionLocal
-from database.models import UserExperience
-from datetime import datetime
+from database.db import get_db, SessionLocal, init_db
+from database.models import UserExperience, AdminUser
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+import bcrypt
+import os
 
 from langchain_core.messages import HumanMessage, AIMessage
 
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+def startup_event():
+    """Initialize database tables on startup."""
+    try:
+        init_db()
+        print("Database tables initialized successfully.")
+    except Exception as e:
+        print(f"Warning: Could not initialize database tables: {e}")
+        print("You may need to run init_db() manually or check your database connection.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +40,18 @@ app.add_middleware(
 )
 
 rag_chain = build_rag_chain()
+
+
+# ---------------------------
+# Admin Auth Config
+# ---------------------------
+
+# In a real app you should set these as environment variables.
+SECRET_KEY = os.getenv("ADMIN_JWT_SECRET_KEY", "change-me-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+security = HTTPBearer()
 
 
 # ---------------------------
@@ -63,6 +90,24 @@ class ExperienceResponse(BaseModel):
     id: int
     status: str
     message: str
+
+
+class AdminRegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    # Simple shared secret to avoid public self-registration
+    registration_secret: Optional[str] = None
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 def run_experience_validation(experience_id: int, original_text: str) -> None:
@@ -109,6 +154,80 @@ def parse_chat_history(history: List[ChatMessage]):
     return parsed
 
 
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against a bcrypt hash."""
+    # Convert string hash to bytes if needed
+    if isinstance(hashed_password, str):
+        hashed_password = hashed_password.encode('utf-8')
+    if isinstance(plain_password, str):
+        plain_password = plain_password.encode('utf-8')
+
+    try:
+        return bcrypt.checkpw(plain_password, hashed_password)
+    except Exception as e:
+        print(f"Error verifying password: {e}")
+        return False
+
+
+def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt."""
+    # Convert password to bytes
+    if isinstance(password, str):
+        password = password.encode('utf-8')
+
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password, salt)
+
+    # Return as string for database storage
+    return hashed.decode('utf-8')
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def get_current_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    """
+    Very small helper that:
+    - reads the token from the Authorization header
+    - decodes it
+    - loads the AdminUser from the database
+    """
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate admin credentials",
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate admin credentials",
+        )
+
+    admin = db.query(AdminUser).filter(AdminUser.username == username).first()
+    if admin is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin not found",
+        )
+    return admin
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask(payload: AskRequest):
 
@@ -124,6 +243,125 @@ def ask(payload: AskRequest):
     source_models = [Source(**source) for source in sources]
 
     return {"answer": answer, "sources": source_models}
+
+
+# ---------------------------
+# Admin Auth Endpoints
+# ---------------------------
+
+@app.post("/api/admin/register", response_model=TokenResponse)
+def register_admin(payload: AdminRegisterRequest, db: Session = Depends(get_db)):
+    """
+    Simple admin registration endpoint.
+
+    We protect this with a shared registration secret so that
+    random users cannot create admin accounts.
+    """
+    try:
+        expected_secret = os.getenv("ADMIN_REGISTRATION_SECRET")
+        if expected_secret and payload.registration_secret != expected_secret:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid registration secret",
+            )
+
+        # Check if username or email already exists
+        existing_user = (
+            db.query(AdminUser)
+            .filter(
+                (AdminUser.username == payload.username)
+                | (AdminUser.email == payload.email)
+            )
+            .first()
+        )
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username or email already registered",
+            )
+
+        hashed_password = get_password_hash(payload.password)
+
+        admin_user = AdminUser(
+            username=payload.username,
+            email=payload.email,
+            hashed_password=hashed_password,
+            created_at=datetime.utcnow(),
+        )
+        db.add(admin_user)
+        db.commit()
+        db.refresh(admin_user)
+
+        # Automatically log the admin in after registration
+        access_token = create_access_token(data={"sub": admin_user.username})
+        return TokenResponse(access_token=access_token)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        print(f"Database error during admin registration: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred. Please try again later.",
+        ) from e
+    except Exception as e:
+        db.rollback()
+        print(f"Unexpected error during admin registration: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        ) from e
+
+
+@app.post("/api/admin/login", response_model=TokenResponse)
+def login_admin(payload: AdminLoginRequest, db: Session = Depends(get_db)):
+    """
+    Admin login endpoint.
+
+    The frontend should send username and password, and it will receive
+    a JWT token that it can store (for example) in memory or localStorage.
+    """
+    try:
+        admin_user = (
+            db.query(AdminUser).filter(AdminUser.username == payload.username).first()
+        )
+
+        if not admin_user or not verify_password(payload.password, admin_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+            )
+
+        access_token = create_access_token(data={"sub": admin_user.username})
+        return TokenResponse(access_token=access_token)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        print(f"Database error during admin login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred. Please try again later.",
+        ) from e
+    except Exception as e:
+        print(f"Unexpected error during admin login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        ) from e
+
+
+@app.get("/api/admin/me")
+def get_current_admin_info(admin: AdminUser = Depends(get_current_admin)):
+    """
+    Simple endpoint to test if the admin token is working.
+    Returns basic info about the logged-in admin.
+    """
+    return {
+        "id": admin.id,
+        "username": admin.username,
+        "email": admin.email,
+        "created_at": admin.created_at.isoformat() if admin.created_at else None,
+    }
 
 
 @app.post("/api/experiences", response_model=ExperienceResponse)

@@ -1,38 +1,65 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Home, Menu, Search, Briefcase, CheckCircle, XCircle, Flag, BookOpen, TrendingUp } from "lucide-react"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Home,
+  Menu,
+  Search,
+  Briefcase,
+  CheckCircle,
+  XCircle,
+  Flag,
+  BookOpen,
+  TrendingUp,
+  LogOut,
+} from "lucide-react";
+import { getAdminToken, removeAdminToken, isAdminLoggedIn } from "@/lib/auth";
 
 type FlaggedContent = {
-  id: string
-  type: "post" | "comment"
-  author: string
-  content: string
-  reason: string
-  timestamp: string
-  status: "pending" | "approved" | "rejected"
-}
+  id: string;
+  type: "post" | "comment";
+  author: string;
+  content: string;
+  reason: string;
+  timestamp: string;
+  status: "pending" | "approved" | "rejected";
+};
 
 type Advice = {
-  id: string
-  title: string
-  category: string
-  content: string
-  basedOn: string
-  usageCount: number
-  effectivenessScore: number
-}
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  basedOn: string;
+  usageCount: number;
+  effectivenessScore: number;
+};
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"flagged" | "advice">("flagged")
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"flagged" | "advice">("flagged");
+
+  // Check if admin is logged in when component loads
+  useEffect(() => {
+    if (!isAdminLoggedIn()) {
+      router.push("/admin/login");
+    }
+  }, [router]);
+
+  const handleLogout = () => {
+    removeAdminToken();
+    router.push("/admin/login");
+  };
   const [flaggedContent, setFlaggedContent] = useState<FlaggedContent[]>([
     {
       id: "1",
       type: "post",
       author: "user_john_doe",
-      content: "This company is terrible and I would never recommend working there. The management is awful.",
+      content:
+        "This company is terrible and I would never recommend working there. The management is awful.",
       reason: "Inappropriate language",
       timestamp: "2 hours ago",
       status: "pending",
@@ -41,7 +68,8 @@ export default function AdminDashboard() {
       id: "2",
       type: "comment",
       author: "career_seeker_23",
-      content: "You should definitely lie on your resume about your experience to get the job.",
+      content:
+        "You should definitely lie on your resume about your experience to get the job.",
       reason: "Unethical advice",
       timestamp: "5 hours ago",
       status: "pending",
@@ -50,12 +78,13 @@ export default function AdminDashboard() {
       id: "3",
       type: "post",
       author: "professional_mike",
-      content: "Looking for advice on negotiating salary for a senior developer position.",
+      content:
+        "Looking for advice on negotiating salary for a senior developer position.",
       reason: "Flagged by mistake",
       timestamp: "1 day ago",
       status: "pending",
     },
-  ])
+  ]);
 
   const [adviceLibrary, setAdviceLibrary] = useState<Advice[]>([
     {
@@ -98,26 +127,34 @@ export default function AdminDashboard() {
       usageCount: 1567,
       effectivenessScore: 4.7,
     },
-  ])
+  ]);
 
   const handleApprove = (id: string) => {
-    setFlaggedContent((prev) => prev.map((item) => (item.id === id ? { ...item, status: "approved" } : item)))
-  }
+    setFlaggedContent((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, status: "approved" } : item
+      )
+    );
+  };
 
   const handleReject = (id: string) => {
-    setFlaggedContent((prev) => prev.map((item) => (item.id === id ? { ...item, status: "rejected" } : item)))
-  }
+    setFlaggedContent((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, status: "rejected" } : item
+      )
+    );
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "approved":
-        return "text-green-600 bg-green-50"
+        return "text-green-600 bg-green-50";
       case "rejected":
-        return "text-red-600 bg-red-50"
+        return "text-red-600 bg-red-50";
       default:
-        return "text-yellow-600 bg-yellow-50"
+        return "text-yellow-600 bg-yellow-50";
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,17 +163,40 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Menu className="w-5 h-5 md:hidden" />
-            <h1 className="text-lg md:text-xl font-semibold">CareerPath Admin</h1>
+            <h1 className="text-lg md:text-xl font-semibold">
+              CareerPath Admin
+            </h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
               <Home className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
               <Search className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
               <Briefcase className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+              onClick={handleLogout}
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
             </Button>
           </div>
         </div>
@@ -177,10 +237,13 @@ export default function AdminDashboard() {
         {activeTab === "flagged" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-foreground">Flagged Posts & Comments</h2>
+              <h2 className="text-2xl font-bold text-foreground">
+                Flagged Posts & Comments
+              </h2>
               <div className="flex gap-2">
                 <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-sm font-medium">
-                  {flaggedContent.filter((c) => c.status === "pending").length} Pending
+                  {flaggedContent.filter((c) => c.status === "pending").length}{" "}
+                  Pending
                 </span>
               </div>
             </div>
@@ -192,24 +255,38 @@ export default function AdminDashboard() {
                     <div className="flex items-center gap-3">
                       <span
                         className={`px-2 py-1 text-xs font-medium uppercase ${
-                          item.type === "post" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+                          item.type === "post"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-purple-100 text-purple-700"
                         }`}
                       >
                         {item.type}
                       </span>
-                      <span className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(item.status)}`}>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium uppercase ${getStatusColor(
+                          item.status
+                        )}`}
+                      >
                         {item.status}
                       </span>
-                      <span className="text-sm text-muted-foreground">by {item.author}</span>
-                      <span className="text-sm text-muted-foreground">{item.timestamp}</span>
+                      <span className="text-sm text-muted-foreground">
+                        by {item.author}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {item.timestamp}
+                      </span>
                     </div>
 
-                    <p className="text-foreground leading-relaxed">{item.content}</p>
+                    <p className="text-foreground leading-relaxed">
+                      {item.content}
+                    </p>
 
                     <div className="flex items-center gap-2 text-sm">
                       <Flag className="w-4 h-4 text-red-500" />
                       <span className="text-muted-foreground">Reason:</span>
-                      <span className="text-red-600 font-medium">{item.reason}</span>
+                      <span className="text-red-600 font-medium">
+                        {item.reason}
+                      </span>
                     </div>
                   </div>
 
@@ -245,7 +322,9 @@ export default function AdminDashboard() {
         {activeTab === "advice" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-foreground">Career Advice Library</h2>
+              <h2 className="text-2xl font-bold text-foreground">
+                Career Advice Library
+              </h2>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Generate New Advice
@@ -254,39 +333,64 @@ export default function AdminDashboard() {
 
             <div className="grid gap-6 md:grid-cols-2">
               {adviceLibrary.map((advice) => (
-                <Card key={advice.id} className="p-6 hover:shadow-lg transition-shadow">
+                <Card
+                  key={advice.id}
+                  className="p-6 hover:shadow-lg transition-shadow"
+                >
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-foreground mb-2">{advice.title}</h3>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">
+                          {advice.title}
+                        </h3>
                         <span className="inline-block px-3 py-1 bg-accent/20 text-accent-foreground text-sm font-medium">
                           {advice.category}
                         </span>
                       </div>
                     </div>
 
-                    <p className="text-muted-foreground leading-relaxed">{advice.content}</p>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {advice.content}
+                    </p>
 
                     <div className="pt-4 border-t border-border space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Based on:</span>
-                        <span className="font-medium text-foreground">{advice.basedOn}</span>
+                        <span className="font-medium text-foreground">
+                          {advice.basedOn}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Times used:</span>
-                        <span className="font-medium text-foreground">{advice.usageCount.toLocaleString()}</span>
+                        <span className="text-muted-foreground">
+                          Times used:
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {advice.usageCount.toLocaleString()}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Effectiveness:</span>
-                        <span className="font-medium text-green-600">{advice.effectivenessScore} / 5.0</span>
+                        <span className="text-muted-foreground">
+                          Effectiveness:
+                        </span>
+                        <span className="font-medium text-green-600">
+                          {advice.effectivenessScore} / 5.0
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1 bg-transparent">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 bg-transparent"
+                      >
                         Edit
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1 bg-transparent">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 bg-transparent"
+                      >
                         View Analytics
                       </Button>
                     </div>
@@ -298,5 +402,5 @@ export default function AdminDashboard() {
         )}
       </main>
     </div>
-  )
+  );
 }
