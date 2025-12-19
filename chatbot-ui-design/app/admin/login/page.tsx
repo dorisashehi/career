@@ -8,13 +8,14 @@ import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { loginAdmin } from "@/lib/api";
 import { saveAdminToken, isAdminLoggedIn } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   // Redirect to admin dashboard if already logged in
   useEffect(() => {
@@ -25,7 +26,6 @@ export default function AdminLoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
@@ -35,14 +35,23 @@ export default function AdminLoginPage() {
       // Save the token to localStorage
       saveAdminToken(response.access_token);
 
+      // Show success toast
+      toast({
+        title: "Login Successful",
+        description: "You have been logged in successfully.",
+      });
+
       // Redirect to admin dashboard
       router.push("/admin");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Login failed. Please try again.");
-      }
+      toast({
+        title: "Login Failed",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Login failed. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -59,12 +68,6 @@ export default function AdminLoginPage() {
             Sign in to access the admin dashboard
           </p>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">

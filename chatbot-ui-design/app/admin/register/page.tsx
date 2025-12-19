@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { registerAdmin } from "@/lib/api";
 import { saveAdminToken, isAdminLoggedIn } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminRegisterPage() {
   const [formData, setFormData] = useState({
@@ -17,9 +18,9 @@ export default function AdminRegisterPage() {
     confirmPassword: "",
     registrationSecret: "",
   });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   // Redirect to admin dashboard if already logged in
   useEffect(() => {
@@ -30,17 +31,24 @@ export default function AdminRegisterPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
     // Check if passwords match
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      toast({
+        title: "Password Mismatch",
+        description: "Passwords do not match. Please try again.",
+        variant: "destructive",
+      });
       return;
     }
 
     // Check password length (basic validation)
     if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long");
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -58,14 +66,23 @@ export default function AdminRegisterPage() {
       // Save the token to localStorage
       saveAdminToken(response.access_token);
 
+      // Show success toast
+      toast({
+        title: "Registration Successful",
+        description: "Your admin account has been created successfully.",
+      });
+
       // Redirect to admin dashboard
       router.push("/admin");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Registration failed. Please try again.");
-      }
+      toast({
+        title: "Registration Failed",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Registration failed. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -80,12 +97,6 @@ export default function AdminRegisterPage() {
           </h1>
           <p className="text-muted-foreground">Create a new admin account</p>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleRegister} className="space-y-6">
           <div className="space-y-2">
