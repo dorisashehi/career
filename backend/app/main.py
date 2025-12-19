@@ -202,16 +202,25 @@ def get_current_admin(
     Very small helper that:
     - reads the token from the Authorization header
     - decodes it
-    - loads the AdminUser from the database
+    - loads the AdminUser from the database using the user ID
     """
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate admin credentials",
+            )
+
+        # Convert string ID back to integer
+        try:
+            user_id = int(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token format",
             )
     except JWTError:
         raise HTTPException(
@@ -219,7 +228,8 @@ def get_current_admin(
             detail="Could not validate admin credentials",
         )
 
-    admin = db.query(AdminUser).filter(AdminUser.username == username).first()
+    # Query by ID instead of username (more secure and stable)
+    admin = db.query(AdminUser).filter(AdminUser.id == user_id).first()
     if admin is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -293,7 +303,8 @@ def register_admin(payload: AdminRegisterRequest, db: Session = Depends(get_db))
         db.refresh(admin_user)
 
         # Automatically log the admin in after registration
-        access_token = create_access_token(data={"sub": admin_user.username})
+        # Use user ID instead of username for better security and stability
+        access_token = create_access_token(data={"sub": str(admin_user.id)})
         return TokenResponse(access_token=access_token)
     except HTTPException:
         raise
@@ -332,7 +343,8 @@ def login_admin(payload: AdminLoginRequest, db: Session = Depends(get_db)):
                 detail="Incorrect username or password",
             )
 
-        access_token = create_access_token(data={"sub": admin_user.username})
+        # Use user ID instead of username for better security and stability
+        access_token = create_access_token(data={"sub": str(admin_user.id)})
         return TokenResponse(access_token=access_token)
     except HTTPException:
         raise
