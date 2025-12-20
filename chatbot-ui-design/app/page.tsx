@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeech } from "@/hooks/use-speech";
+import Link from "next/link";
 
 type Message = {
   id: string;
@@ -223,33 +224,23 @@ export default function CareerCoachChatbot() {
             <h1 className="text-lg md:text-xl font-semibold">CareerPath</h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Home className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Search className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Briefcase className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="outline"
-              className="hidden md:flex bg-primary-foreground text-primary hover:bg-primary-foreground/90"
-            >
-              Career Resources
-            </Button>
+            <Link href="/">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-primary-foreground hover:bg-primary-foreground/10"
+              >
+                <Home className="w-5 h-5" />
+              </Button>
+            </Link>
+            <Link href="/feedback">
+              <Button
+                variant="outline"
+                className="hidden md:flex bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+              >
+                Share Experiences
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
