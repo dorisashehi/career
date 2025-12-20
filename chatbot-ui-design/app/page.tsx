@@ -36,7 +36,7 @@ type Message = {
   content: string;
   timestamp: string;
   sources?: Source[];
-  isError?: boolean; // Flag to prevent speaking error messages
+  isError?: boolean;
 };
 
 export default function CareerCoachChatbot() {
@@ -58,7 +58,6 @@ export default function CareerCoachChatbot() {
   const previousMessageCountRef = useRef<number>(1);
   const { toast } = useToast();
 
-  // Use speech hook
   const {
     isSpeaking,
     isRecording,
@@ -71,7 +70,6 @@ export default function CareerCoachChatbot() {
     handleStartRecording,
     lastSpokenMessageIdRef,
   } = useSpeech((text: string) => {
-    // Callback when speech-to-text completes
     if (handleSendQuestionRef.current) {
       handleSendQuestionRef.current(text);
     }
@@ -81,9 +79,7 @@ export default function CareerCoachChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Auto-scroll effect - only when message count changes (new message added)
   useEffect(() => {
-    // Only scroll if a new message was actually added
     if (messages.length > previousMessageCountRef.current) {
       const timeoutId = setTimeout(() => {
         scrollToBottom();
@@ -92,9 +88,8 @@ export default function CareerCoachChatbot() {
       previousMessageCountRef.current = messages.length;
       return () => clearTimeout(timeoutId);
     }
-  }, [messages.length]); // Only depend on length, not the whole array
+  }, [messages.length]);
 
-  // Auto-speak when coach messages arrive
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
 
@@ -103,35 +98,28 @@ export default function CareerCoachChatbot() {
       lastMessage.id !== "1" &&
       lastSpokenMessageIdRef.current !== lastMessage.id &&
       !isMuted &&
-      !lastMessage.isError // Don't speak error messages
+      !lastMessage.isError
     ) {
-      stopSpeaking(true); // ensure clean start and clear any paused speech
+      stopSpeaking(true);
       lastSpokenMessageIdRef.current = lastMessage.id;
       speakText(lastMessage.content, lastMessage.id);
     }
   }, [messages, isMuted, speakText, stopSpeaking]);
-  // Convert our messages to the format the API expects
-  // The API uses "assistant" but we use "coach" in the UI
+
   const convertMessagesToApiFormat = (msgs: Message[]): ApiChatMessage[] => {
-    // Skip the first welcome message (it has id "1")
     const messagesToSend = msgs.filter((msg) => msg.id !== "1");
 
-    // Convert "coach" to "assistant" for the API
     return messagesToSend.map((msg) => ({
       role: msg.role === "coach" ? "assistant" : "user",
       content: msg.content,
     }));
   };
 
-  // This function sends a question to the backend and shows the response
   const handleSendQuestion = async (question: string) => {
-    // Don't send empty questions
     if (!question.trim()) return;
 
-    // Stop any current speech
     stopSpeaking();
 
-    // Create a message object for the user's question
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -142,23 +130,14 @@ export default function CareerCoachChatbot() {
       }),
     };
 
-    // Add the user's message to the chat
     setMessages((prev) => [...prev, userMessage]);
-
-    // Show that we're waiting for a response
     setIsTyping(true);
 
     try {
-      // Get all previous messages (including the one we just added)
       const allMessages = [...messages, userMessage];
-
-      // Convert them to the format the API wants
       const chatHistory = convertMessagesToApiFormat(allMessages);
-
-      // Call the API to get an answer and sources
       const response = await askQuestion(question.trim(), chatHistory);
 
-      // Create a message object for the coach's response
       const coachMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
@@ -170,30 +149,22 @@ export default function CareerCoachChatbot() {
         sources: response.sources || [],
       };
 
-      // Stop showing the typing indicator
       setIsTyping(false);
-
-      // Add the coach's response to the chat
       setMessages((prev) => [...prev, coachMessage]);
     } catch (error) {
-      // If something went wrong, stop the typing indicator
       setIsTyping(false);
 
-      // Get the error message
       let errorMessage = "Something went wrong. Please try again.";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
 
-      // Show the error to the user
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
       });
 
-      // Also add an error message in the chat
-      // Check if it's a 413 error (request too large)
       let errorContent =
         "I'm sorry, I encountered an error. Please try again or check your connection.";
       if (
@@ -214,14 +185,12 @@ export default function CareerCoachChatbot() {
           hour: "numeric",
           minute: "2-digit",
         }),
-        isError: true, // Flag to prevent speaking error messages
+        isError: true,
       };
       setMessages((prev) => [...prev, errorChatMessage]);
     }
   };
 
-  // Store the function reference for use in speech recognition
-  // Use useCallback to prevent this from changing on every render
   const handleSendQuestionStable = useRef(handleSendQuestion);
 
   useEffect(() => {
@@ -232,7 +201,6 @@ export default function CareerCoachChatbot() {
     handleSendQuestionRef.current = handleSendQuestionStable.current;
   }, []);
 
-  // Handle text input submission
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
     handleSendQuestion(inputValue);
@@ -248,7 +216,6 @@ export default function CareerCoachChatbot() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="bg-primary text-primary-foreground px-6 py-4 rounded-b-3xl shadow-lg">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -287,28 +254,22 @@ export default function CareerCoachChatbot() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 md:py-12">
         <div className="grid md:grid-cols-2 gap-8 items-start">
-          {/* Coach Avatar Section */}
           <div className="flex flex-col items-center justify-center space-y-6 md:sticky md:top-8">
             <div className="relative">
-              {/* Pulse effect when speaking */}
               {isSpeaking && (
                 <div className="absolute inset-0 rounded-full bg-accent/30 animate-pulse-glow scale-110" />
               )}
 
-              {/* Avatar */}
               <div
                 className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden bg-gradient-to-br from-accent to-accent/70 shadow-2xl transition-transform duration-300 ${
                   isSpeaking ? "animate-speak" : ""
                 }`}
               >
                 <svg viewBox="0 0 400 400" className="w-full h-full">
-                  {/* Head */}
                   <ellipse cx="200" cy="180" rx="100" ry="120" fill="#f4a261" />
 
-                  {/* Hair */}
                   <path
                     d="M100 140 Q100 60 200 60 Q300 60 300 140"
                     fill="#2d3748"
@@ -322,20 +283,17 @@ export default function CareerCoachChatbot() {
                     fill="#2d3748"
                   />
 
-                  {/* Eyes */}
                   <ellipse cx="165" cy="170" rx="15" ry="20" fill="#2d3748" />
                   <ellipse cx="235" cy="170" rx="15" ry="20" fill="#2d3748" />
                   <ellipse cx="170" cy="168" rx="6" ry="8" fill="white" />
                   <ellipse cx="240" cy="168" rx="6" ry="8" fill="white" />
 
-                  {/* Nose */}
                   <path
                     d="M200 185 L195 205 L205 205 Z"
                     fill="#e76f51"
                     opacity="0.5"
                   />
 
-                  {/* Mouth - changes based on speaking */}
                   {isSpeaking ? (
                     <ellipse
                       cx="200"
@@ -354,7 +312,6 @@ export default function CareerCoachChatbot() {
                     />
                   )}
 
-                  {/* Shirt */}
                   <path
                     d="M100 290 Q100 310 120 320 L200 380 L280 320 Q300 310 300 290 L300 280 L250 300 L200 290 L150 300 L100 280 Z"
                     fill="#4a5568"
@@ -364,7 +321,6 @@ export default function CareerCoachChatbot() {
                 </svg>
               </div>
 
-              {/* Speaking indicator */}
               {isSpeaking && (
                 <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-accent text-accent-foreground px-4 py-2 rounded-full shadow-lg">
                   <div
@@ -409,7 +365,6 @@ export default function CareerCoachChatbot() {
               </p>
             </div>
 
-            {/* Start Recording button */}
             <Button
               onClick={handleStartRecording}
               disabled={!isSpeechSupported}
@@ -432,7 +387,6 @@ export default function CareerCoachChatbot() {
               )}
             </Button>
 
-            {/* Recording indicator with transcript */}
             {isRecording && (
               <div className="flex flex-col items-center gap-2 text-center">
                 <div className="flex items-center gap-2 text-destructive">
@@ -448,10 +402,8 @@ export default function CareerCoachChatbot() {
             )}
           </div>
 
-          {/* Chat Section */}
           <div className="flex flex-col h-[600px]">
             <Card className="flex-1 flex flex-col shadow-xl overflow-hidden">
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {messages.map((message) => (
                   <div
@@ -510,7 +462,6 @@ export default function CareerCoachChatbot() {
                             </p>
                             <div className="space-y-2">
                               {message.sources.map((source, idx) => {
-                                // Format upvotes (e.g., 8290 -> 8.3k)
                                 const formatUpvotes = (
                                   score: number | undefined
                                 ) => {
@@ -521,7 +472,6 @@ export default function CareerCoachChatbot() {
                                   return score.toString();
                                 };
 
-                                // Format date (e.g., 2025-05-01 -> May 1, 2025)
                                 const formatDate = (
                                   dateStr: string | undefined
                                 ) => {
@@ -618,7 +568,6 @@ export default function CareerCoachChatbot() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input Area */}
               <div className="border-t border-border p-4 bg-card">
                 <div className="flex gap-2">
                   <Input
@@ -640,7 +589,6 @@ export default function CareerCoachChatbot() {
               </div>
             </Card>
 
-            {/* Quick Actions */}
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 variant="outline"

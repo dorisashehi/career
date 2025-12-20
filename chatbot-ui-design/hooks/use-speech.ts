@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-const MAX_SPEECH_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+const MAX_SPEECH_TIME = 5 * 60 * 1000;
 
 export function useSpeech(onTranscriptComplete?: (text: string) => void) {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -13,45 +13,33 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
   const [isMuted, setIsMuted] = useState(false);
   const { toast } = useToast();
 
-  // Refs for speech recognition
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const finalTranscriptRef = useRef<string>("");
   const isMutedRef = useRef(false);
-  const onTranscriptCompleteRef = useRef(onTranscriptComplete);
-
-  // Refs for speech synthesis
-  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const isSpeakingActiveRef = useRef<boolean>(false);
-  const isCancellingRef = useRef(false);
-  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSpokenMessageIdRef = useRef<string | null>(null);
-
-  // Store paused speech state for resuming
-  const pausedSpeechRef = useRef<{
+  const callbackRef = useRef(onTranscriptComplete);
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const pausedRef = useRef<{
     chunks: string[];
-    currentIndex: number;
+    index: number;
     messageId: string;
   } | null>(null);
-
-  // Track current speech state for saving when muting
-  const currentSpeechRef = useRef<{
+  const currentRef = useRef<{
     chunks: string[];
-    currentIndex: number;
-    messageId: string | undefined;
+    index: number;
+    messageId?: string;
   } | null>(null);
 
-  // Keep refs in sync
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
   useEffect(() => {
-    onTranscriptCompleteRef.current = onTranscriptComplete;
+    callbackRef.current = onTranscriptComplete;
   }, [onTranscriptComplete]);
 
-  // Initialize speech recognition on mount
   useEffect(() => {
-    // Check for browser support
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -63,75 +51,62 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
       recognition.interimResults = true;
       recognition.lang = "en-US";
 
-      // When we get speech results (what the user said)
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let temporaryText = ""; // Text that might change as user speaks
-        let finalText = ""; // Text that's confirmed (user finished saying it)
+        let tempText = "";
+        let finalText = "";
 
-        // Go through all the speech results
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const text = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            // This is the final, confirmed text
             finalText += text + " ";
           } else {
-            // This is temporary text that might change
-            temporaryText += text;
+            tempText += text;
           }
         }
 
-        // If we have final text, save it
         if (finalText) {
-          const cleanedText = finalText.trim();
-          finalTranscriptRef.current = cleanedText; // Save for later
-          setTranscript(cleanedText); // Show it on screen
+          const cleaned = finalText.trim();
+          finalTranscriptRef.current = cleaned;
+          setTranscript(cleaned);
         } else {
-          // Otherwise show the temporary text
-          setTranscript(temporaryText);
+          setTranscript(tempText);
         }
       };
 
-      // When there's an error with speech recognition
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        setIsRecording(false); // Stop recording
-        setTranscript(""); // Clear any text
+        setIsRecording(false);
+        setTranscript("");
 
-        // Figure out what went wrong and show a helpful message
-        let errorMessage = "Something went wrong with speech recognition.";
+        let errorMsg = "Something went wrong with speech recognition.";
         if (event.error === "no-speech") {
-          errorMessage = "No speech detected. Please try again.";
+          errorMsg = "No speech detected. Please try again.";
         } else if (event.error === "audio-capture") {
-          errorMessage = "No microphone found. Please check your microphone.";
+          errorMsg = "No microphone found. Please check your microphone.";
         } else if (event.error === "not-allowed") {
-          errorMessage =
+          errorMsg =
             "Microphone permission denied. Please allow microphone access.";
         } else if (event.error === "network") {
-          errorMessage = "Network error. Please check your connection.";
+          errorMsg = "Network error. Please check your connection.";
         }
 
-        // Show the error to the user
         toast({
           title: "Recording Error",
-          description: errorMessage,
+          description: errorMsg,
           variant: "destructive",
         });
       };
 
-      // When recording stops
       recognition.onend = () => {
-        setIsRecording(false); // Mark that we're no longer recording
-
-        // If we got some text, send it to the callback
+        setIsRecording(false);
         const finalText = finalTranscriptRef.current.trim();
-        if (finalText && onTranscriptCompleteRef.current) {
-          // Wait a tiny bit, then send the question to get an answer
+        if (finalText && callbackRef.current) {
           setTimeout(() => {
-            onTranscriptCompleteRef.current?.(finalText);
-            finalTranscriptRef.current = ""; // Clear it
-            setTranscript(""); // Clear it from screen
+            callbackRef.current?.(finalText);
+            finalTranscriptRef.current = "";
+            setTranscript("");
           }, 100);
         } else {
-          setTranscript(""); // Clear any text
+          setTranscript("");
         }
       };
 
@@ -151,13 +126,11 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
         recognitionRef.current.stop();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, [toast]);
 
-  // Helper function to set up utterance event handlers
   const setupUtterance = (
     utterance: SpeechSynthesisUtterance,
-    isLastChunk: boolean = true
+    isLast: boolean = true
   ) => {
     utterance.lang = "en-US";
     utterance.rate = 1.0;
@@ -166,292 +139,232 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      isSpeakingActiveRef.current = true;
     };
 
     utterance.onend = () => {
-      if (isLastChunk) {
+      if (isLast) {
         setIsSpeaking(false);
-        isSpeakingActiveRef.current = false;
-        speechSynthesisRef.current = null;
+        speechRef.current = null;
       }
     };
 
-    utterance.onerror = (event) => {
-      console.error("Speech synthesis error:", event);
+    utterance.onerror = () => {
       setIsSpeaking(false);
-      isSpeakingActiveRef.current = false;
-      speechSynthesisRef.current = null;
+      speechRef.current = null;
     };
   };
 
-  // Helper function to speak text chunks sequentially
   const speakChunks = useCallback(
     (chunks: string[], index: number, messageId?: string) => {
-      // Update current speech state
-      currentSpeechRef.current = {
+      currentRef.current = {
         chunks,
-        currentIndex: index,
+        index,
         messageId,
       };
 
-      // Pause if muted (check ref for latest value) - save state for resuming
       if (isMutedRef.current) {
-        // Save the paused state so we can resume later
         if (messageId) {
-          pausedSpeechRef.current = {
+          pausedRef.current = {
             chunks,
-            currentIndex: index,
+            index,
             messageId,
           };
         }
-        // Cancel current speech but don't clear the state
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
         setIsSpeaking(false);
-        isSpeakingActiveRef.current = false;
-        speechSynthesisRef.current = null;
+        speechRef.current = null;
         return;
       }
 
       if (index >= chunks.length) {
-        // All chunks done
         setIsSpeaking(false);
-        isSpeakingActiveRef.current = false;
-        speechSynthesisRef.current = null;
-        currentSpeechRef.current = null;
-        pausedSpeechRef.current = null;
-        // Clear timeout when done
-        if (speechTimeoutRef.current) {
-          clearTimeout(speechTimeoutRef.current);
-          speechTimeoutRef.current = null;
+        speechRef.current = null;
+        currentRef.current = null;
+        pausedRef.current = null;
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
         }
         return;
       }
 
       const utterance = new SpeechSynthesisUtterance(chunks[index]);
-      const isLastChunk = index === chunks.length - 1;
-      setupUtterance(utterance, isLastChunk);
+      const isLast = index === chunks.length - 1;
+      setupUtterance(utterance, isLast);
 
       utterance.onend = () => {
-        // Stop if muted before speaking next chunk (check ref for latest value)
         if (isMutedRef.current) {
           stopSpeaking();
           return;
         }
 
-        // Speak next chunk immediately after the previous one finishes
-        if (!isLastChunk) {
-          // Use a small delay to ensure the previous utterance is fully cleared
+        if (!isLast) {
           setTimeout(() => {
-            // Pass messageId if available (check if it's in the closure or get from pausedSpeechRef)
             const msgId =
-              pausedSpeechRef.current?.messageId ||
-              lastSpokenMessageIdRef.current;
+              pausedRef.current?.messageId || lastMessageIdRef.current;
             speakChunks(chunks, index + 1, msgId || undefined);
           }, 50);
         } else {
           setIsSpeaking(false);
-          isSpeakingActiveRef.current = false;
-          speechSynthesisRef.current = null;
-          currentSpeechRef.current = null;
-          pausedSpeechRef.current = null;
-          // Clear timeout when done
-          if (speechTimeoutRef.current) {
-            clearTimeout(speechTimeoutRef.current);
-            speechTimeoutRef.current = null;
+          speechRef.current = null;
+          currentRef.current = null;
+          pausedRef.current = null;
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
           }
         }
       };
 
-      utterance.onerror = (event) => {
-        console.error("Speech synthesis error:", event);
-        // Try to continue with the next chunk even if there's an error
-        if (!isLastChunk) {
+      utterance.onerror = () => {
+        if (!isLast) {
           setTimeout(() => {
             const msgId =
-              pausedSpeechRef.current?.messageId ||
-              lastSpokenMessageIdRef.current;
+              pausedRef.current?.messageId || lastMessageIdRef.current;
             speakChunks(chunks, index + 1, msgId || undefined);
           }, 50);
         } else {
           setIsSpeaking(false);
-          isSpeakingActiveRef.current = false;
-          speechSynthesisRef.current = null;
-          currentSpeechRef.current = null;
-          pausedSpeechRef.current = null;
-          // Clear timeout when done
-          if (speechTimeoutRef.current) {
-            clearTimeout(speechTimeoutRef.current);
-            speechTimeoutRef.current = null;
+          speechRef.current = null;
+          currentRef.current = null;
+          pausedRef.current = null;
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
           }
         }
       };
 
-      speechSynthesisRef.current = utterance;
+      speechRef.current = utterance;
       window.speechSynthesis.speak(utterance);
     },
     []
   );
 
-  // Function to speak text using text-to-speech with timeout and chunking
   const speakText = useCallback(
     (text: string, messageId?: string) => {
       if (!("speechSynthesis" in window)) return;
-      // Don't speak if muted (check ref for latest value)
+
       if (isMutedRef.current) {
-        // If muted, still prepare the chunks and save them for when unmuted
         const chunkSize = 200;
         const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
         const chunks: string[] = [];
-        let currentChunk = "";
+        let current = "";
 
         for (const sentence of sentences) {
-          if ((currentChunk + sentence).length <= chunkSize) {
-            currentChunk += sentence;
+          if ((current + sentence).length <= chunkSize) {
+            current += sentence;
           } else {
-            if (currentChunk) chunks.push(currentChunk.trim());
-            currentChunk = sentence;
+            if (current) chunks.push(current.trim());
+            current = sentence;
           }
         }
-        if (currentChunk) chunks.push(currentChunk.trim());
-
-        if (chunks.length === 0) {
-          chunks.push(text);
-        }
+        if (current) chunks.push(current.trim());
+        if (chunks.length === 0) chunks.push(text);
 
         if (messageId) {
-          pausedSpeechRef.current = {
+          pausedRef.current = {
             chunks,
-            currentIndex: 0,
+            index: 0,
             messageId,
           };
         }
         return;
       }
 
-      // HARD STOP everything
       window.speechSynthesis.cancel();
-      isCancellingRef.current = false;
 
-      // Clear any existing timeout
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-        speechTimeoutRef.current = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
 
-      // Split text into chunks (max 200 characters per chunk to avoid browser limits)
       const chunkSize = 200;
       const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
       const chunks: string[] = [];
-      let currentChunk = "";
+      let current = "";
 
       for (const sentence of sentences) {
-        if ((currentChunk + sentence).length <= chunkSize) {
-          currentChunk += sentence;
+        if ((current + sentence).length <= chunkSize) {
+          current += sentence;
         } else {
-          if (currentChunk) chunks.push(currentChunk.trim());
-          currentChunk = sentence;
+          if (current) chunks.push(current.trim());
+          current = sentence;
         }
       }
-      if (currentChunk) chunks.push(currentChunk.trim());
+      if (current) chunks.push(current.trim());
+      if (chunks.length === 0) chunks.push(text);
 
-      // If no chunks, use the original text
-      if (chunks.length === 0) {
-        chunks.push(text);
-      }
-
-      // Set a maximum duration timeout
-      speechTimeoutRef.current = setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         stopSpeaking();
         toast({
           title: "Speech Timeout",
           description: "Speech stopped after maximum duration.",
           variant: "default",
         });
-      }, MAX_SPEECH_DURATION);
+      }, MAX_SPEECH_TIME);
 
-      // Speak chunks sequentially
       speakChunks(chunks, 0, messageId);
     },
     [speakChunks, toast]
   );
 
-  // Stop speaking
   const stopSpeaking = useCallback((clearPaused = false) => {
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
-    isSpeakingActiveRef.current = false;
-    speechSynthesisRef.current = null;
-    // Clear timeout when stopping
-    if (speechTimeoutRef.current) {
-      clearTimeout(speechTimeoutRef.current);
-      speechTimeoutRef.current = null;
+    speechRef.current = null;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
-    // Clear paused speech if requested (e.g., when starting new speech)
     if (clearPaused) {
-      pausedSpeechRef.current = null;
-      currentSpeechRef.current = null;
+      pausedRef.current = null;
+      currentRef.current = null;
     }
   }, []);
 
-  // Toggle mute/unmute
   const handleToggleMute = useCallback(() => {
     const newMuted = !isMuted;
-
-    // Update ref immediately so speakChunks can check it
     isMutedRef.current = newMuted;
-
     setIsMuted(newMuted);
 
-    // If we're muting and currently speaking, pause the speech and save state
-    if (newMuted && isSpeaking && currentSpeechRef.current) {
-      // Save the current speech state for resuming
-      const current = currentSpeechRef.current;
+    if (newMuted && isSpeaking && currentRef.current) {
+      const current = currentRef.current;
       if (current.messageId) {
-        pausedSpeechRef.current = {
+        pausedRef.current = {
           chunks: current.chunks,
-          currentIndex: current.currentIndex,
+          index: current.index,
           messageId: current.messageId,
         };
       }
-      // Cancel current speech
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
       setIsSpeaking(false);
-      isSpeakingActiveRef.current = false;
-      speechSynthesisRef.current = null;
-    }
-    // If we're unmuting and there's paused speech, resume it
-    else if (!newMuted && pausedSpeechRef.current) {
-      const paused = pausedSpeechRef.current;
-      // Resume from where we left off
+      speechRef.current = null;
+    } else if (!newMuted && pausedRef.current) {
+      const paused = pausedRef.current;
       setTimeout(() => {
-        // Set a maximum duration timeout for the resumed speech
-        speechTimeoutRef.current = setTimeout(() => {
+        timeoutRef.current = setTimeout(() => {
           stopSpeaking(true);
           toast({
             title: "Speech Timeout",
             description: "Speech stopped after maximum duration.",
             variant: "default",
           });
-        }, MAX_SPEECH_DURATION);
+        }, MAX_SPEECH_TIME);
 
-        // Resume speaking from the paused position
         setIsSpeaking(true);
-        isSpeakingActiveRef.current = true;
-        speakChunks(paused.chunks, paused.currentIndex, paused.messageId);
+        speakChunks(paused.chunks, paused.index, paused.messageId);
       }, 100);
     }
   }, [isMuted, isSpeaking, speakChunks, stopSpeaking, toast]);
 
-  // Handle the record button click
   const handleStartRecording = useCallback(() => {
-    // Check if speech recognition is supported
     if (!isSpeechSupported) {
       toast({
         title: "Not Supported",
@@ -463,18 +376,15 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
     }
 
     if (!isRecording) {
-      // Start recording
-      stopSpeaking(); // Stop any current speech
-      setTranscript(""); // Clear any old text
-      setIsRecording(true); // Mark that we're recording
+      stopSpeaking();
+      setTranscript("");
+      setIsRecording(true);
 
       try {
-        // Start the speech recognition
         if (recognitionRef.current) {
           recognitionRef.current.start();
         }
       } catch (error) {
-        // If starting failed, stop recording and show an error
         setIsRecording(false);
         toast({
           title: "Recording Error",
@@ -483,7 +393,6 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
         });
       }
     } else {
-      // Stop recording
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -491,28 +400,23 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
     }
   }, [isSpeechSupported, isRecording, stopSpeaking, toast]);
 
-  // Cleanup effect that stops speech on page reload/unload
   useEffect(() => {
     const stopSpeech = () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
       setIsSpeaking(false);
-      isSpeakingActiveRef.current = false;
-      speechSynthesisRef.current = null;
-      // Clear timeout
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-        speechTimeoutRef.current = null;
+      speechRef.current = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
 
-    // Stop speech on page reload/unload
     window.addEventListener("beforeunload", stopSpeech);
     window.addEventListener("unload", stopSpeech);
     window.addEventListener("pagehide", stopSpeech);
 
-    // Stop speech when page becomes hidden (e.g., tab switch)
     const handleVisibilityChange = () => {
       if (document.hidden) {
         stopSpeech();
@@ -525,24 +429,20 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
       window.removeEventListener("unload", stopSpeech);
       window.removeEventListener("pagehide", stopSpeech);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      // Also stop on component unmount
       stopSpeech();
     };
   }, []);
 
   return {
-    // State
     isSpeaking,
     isRecording,
     transcript,
     isSpeechSupported,
     isMuted,
-    // Functions
     speakText,
     stopSpeaking,
     handleToggleMute,
     handleStartRecording,
-    // Internal refs for message tracking (used by page component)
-    lastSpokenMessageIdRef,
+    lastSpokenMessageIdRef: lastMessageIdRef,
   };
 }
