@@ -258,85 +258,19 @@ export default function CareerCoachChatbot() {
         <div className="grid md:grid-cols-2 gap-8 items-start">
           <div className="flex flex-col items-center justify-center space-y-6 md:sticky md:top-8">
             <div className="relative">
-              {isSpeaking && (
-                <div className="absolute inset-0 rounded-full bg-accent/30 animate-pulse-glow scale-110" />
-              )}
-
-              <div
-                className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden bg-gradient-to-br from-accent to-accent/70 shadow-2xl transition-transform duration-300 ${
-                  isSpeaking ? "animate-speak" : ""
-                }`}
-              >
-                <svg viewBox="0 0 400 400" className="w-full h-full">
-                  <ellipse cx="200" cy="180" rx="100" ry="120" fill="#f4a261" />
-
-                  <path
-                    d="M100 140 Q100 60 200 60 Q300 60 300 140"
-                    fill="#2d3748"
-                  />
-                  <path
-                    d="M100 140 L100 180 Q100 120 130 110 Z"
-                    fill="#2d3748"
-                  />
-                  <path
-                    d="M300 140 L300 180 Q300 120 270 110 Z"
-                    fill="#2d3748"
-                  />
-
-                  <ellipse cx="165" cy="170" rx="15" ry="20" fill="#2d3748" />
-                  <ellipse cx="235" cy="170" rx="15" ry="20" fill="#2d3748" />
-                  <ellipse cx="170" cy="168" rx="6" ry="8" fill="white" />
-                  <ellipse cx="240" cy="168" rx="6" ry="8" fill="white" />
-
-                  <path
-                    d="M200 185 L195 205 L205 205 Z"
-                    fill="#e76f51"
-                    opacity="0.5"
-                  />
-
-                  {isSpeaking ? (
-                    <ellipse
-                      cx="200"
-                      cy="220"
-                      rx="30"
-                      ry="15"
-                      fill="#2d3748"
-                      opacity="0.8"
-                    />
-                  ) : (
-                    <path
-                      d="M180 220 Q200 230 220 220"
-                      stroke="#2d3748"
-                      strokeWidth="3"
-                      fill="none"
-                    />
-                  )}
-
-                  <path
-                    d="M100 290 Q100 310 120 320 L200 380 L280 320 Q300 310 300 290 L300 280 L250 300 L200 290 L150 300 L100 280 Z"
-                    fill="#4a5568"
-                  />
-                  <circle cx="200" cy="305" r="3" fill="white" />
-                  <circle cx="200" cy="320" r="3" fill="white" />
-                </svg>
+              <div className="relative w-64 h-64 md:w-80 md:h-80 overflow-hidden bg-background">
+                <img
+                  src={
+                    isSpeaking ? "/avatar/animation.gif" : "/avatar/photo.png"
+                  }
+                  alt="Career Coach Avatar"
+                  className={`w-full h-full object-center transition-all duration-300 ${
+                    isSpeaking
+                      ? "object-cover scale-110"
+                      : "object-contain scale-100"
+                  }`}
+                />
               </div>
-
-              {isSpeaking && (
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-accent text-accent-foreground px-4 py-2 rounded-full shadow-lg">
-                  <div
-                    className="w-2 h-2 bg-current rounded-full animate-bounce"
-                    style={{ animationDelay: "0ms" }}
-                  />
-                  <div
-                    className="w-2 h-2 bg-current rounded-full animate-bounce"
-                    style={{ animationDelay: "150ms" }}
-                  />
-                  <div
-                    className="w-2 h-2 bg-current rounded-full animate-bounce"
-                    style={{ animationDelay: "300ms" }}
-                  />
-                </div>
-              )}
             </div>
 
             <div className="text-center space-y-2">
