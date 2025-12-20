@@ -35,6 +35,7 @@ type Message = {
   content: string;
   timestamp: string;
   sources?: Source[];
+  isError?: boolean; // Flag to prevent speaking error messages
 };
 
 export default function CareerCoachChatbot() {
@@ -457,7 +458,8 @@ export default function CareerCoachChatbot() {
       lastMessage?.role === "coach" &&
       lastMessage.id !== "1" &&
       lastSpokenMessageIdRef.current !== lastMessage.id &&
-      !isMuted
+      !isMuted &&
+      !lastMessage.isError // Don't speak error messages
     ) {
       stopSpeaking(true); // ensure clean start and clear any paused speech
       lastSpokenMessageIdRef.current = lastMessage.id;
@@ -640,15 +642,28 @@ export default function CareerCoachChatbot() {
       });
 
       // Also add an error message in the chat
+      // Check if it's a 413 error (request too large)
+      let errorContent =
+        "I'm sorry, I encountered an error. Please try again or check your connection.";
+      if (
+        error instanceof Error &&
+        (error.message.includes("413") ||
+          error.message.includes("Request Entity Too Large") ||
+          error.message.includes("too large"))
+      ) {
+        errorContent =
+          "Your question or conversation history is too long. Please try asking a shorter question or start a new conversation.";
+      }
+
       const errorChatMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
-        content:
-          "I'm sorry, I encountered an error. Please try again or check your connection.",
+        content: errorContent,
         timestamp: new Date().toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
         }),
+        isError: true, // Flag to prevent speaking error messages
       };
       setMessages((prev) => [...prev, errorChatMessage]);
     }

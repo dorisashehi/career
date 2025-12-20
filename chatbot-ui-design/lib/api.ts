@@ -81,6 +81,18 @@ export async function askQuestion(
     });
 
     if (!response.ok) {
+      // Handle 413 error specifically (Request Entity Too Large)
+      if (response.status === 413) {
+        const errorData = await response
+          .json()
+          .catch(() => ({
+            detail: "Request too large. Please try a shorter question.",
+          }));
+        throw new Error(
+          errorData.detail ||
+            "Request too large. Please try asking a shorter question or start a new conversation."
+        );
+      }
       throw new Error(
         `Backend error: ${response.status} ${response.statusText}`
       );
