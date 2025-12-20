@@ -1,0 +1,6 @@
+# Monthly scheduled tasks for Career Catalyst
+# Run save_to_database.py at 2:00 AM on the 1st of each month
+0 2 1 * * /home/dorisa/Public/AI/career/backend/scripts/cron_scripts/run_save_to_database.sh
+
+# Run generate_embeddings.py at 3:00 AM on the 1st of each month
+0 3 1 * * /home/dorisa/Public/AI/career/backend/scripts/cron_scripts/run_generate_embeddings.sh
