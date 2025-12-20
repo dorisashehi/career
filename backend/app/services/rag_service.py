@@ -27,12 +27,22 @@ def load_embeddings():
 
 class PgVectorRetriever(BaseRetriever):
     embeddings: object = None
-    k: int = 5
+    k: int = 3  # Reduced from 5 to 3 to lower token count
+    max_content_length: int = 2000  # Max characters per document
+    max_comments: int = 5  # Reduced from 10 to 5 comments per post
     model_config = {"arbitrary_types_allowed": True}
 
-    def __init__(self, embeddings, k=5):
+    def __init__(self, embeddings, k=3):
         super().__init__(embeddings=embeddings, k=k)
         object.__setattr__(self, 'db', SessionLocal())
+
+    def _truncate_text(self, text: str, max_length: int) -> str:
+        """Truncate text to max_length, preserving word boundaries."""
+        if len(text) <= max_length:
+            return text
+        # Truncate and add ellipsis
+        truncated = text[:max_length].rsplit(' ', 1)[0]
+        return truncated + "... [truncated]"
 
     def _get_relevant_documents(self, query: str):
         query_embedding = self.embeddings.embed_query(query)
@@ -63,14 +73,29 @@ class PgVectorRetriever(BaseRetriever):
         documents = []
 
         for row in results:
-            content = f"Title: {row.title}\n\nPost: {row.text}"
+            # Truncate post text to prevent token overflow
+            post_text = self._truncate_text(row.text or "", self.max_content_length // 2)
+            content = f"Title: {row.title}\n\nPost: {post_text}"
 
-            comments = self.db.query(Comment).filter(Comment.post_id == row.post_id).limit(10).all()
+            # Reduced from 10 to 5 comments per post
+            comments = self.db.query(Comment).filter(Comment.post_id == row.post_id).limit(self.max_comments).all()
 
             if comments:
                 content += "\n\nComments and Responses:"
+                comment_text = ""
                 for comment in comments:
-                    content += f"\n{comment.text}"
+                    comment_text += f"\n{comment.text}"
+
+                # Truncate comments section if too long
+                max_comment_length = self.max_content_length // 2
+                if len(comment_text) > max_comment_length:
+                    comment_text = self._truncate_text(
+                        comment_text, max_comment_length
+                    )
+                content += comment_text
+
+            # Final truncation of entire content
+            content = self._truncate_text(content, self.max_content_length)
 
             metadata = {
                 'post_id': row.post_id,
@@ -87,7 +112,7 @@ class PgVectorRetriever(BaseRetriever):
         return documents
 
 
-def load_retriever(embeddings, k: int = 5):
+def load_retriever(embeddings, k: int = 3):
     return PgVectorRetriever(embeddings, k)
 
 
@@ -141,6 +166,12 @@ def ask_question(
 ):
     if chat_history is None:
         chat_history = []
+
+    # Limit chat history to last 5 messages to prevent token overflow
+    # Each message can be large, so we keep only recent context
+    max_history_messages = 5
+    if len(chat_history) > max_history_messages:
+        chat_history = chat_history[-max_history_messages:]
 
     result = rag_chain.invoke(
         {

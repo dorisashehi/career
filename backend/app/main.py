@@ -240,19 +240,29 @@ def get_current_admin(
 
 @app.post("/ask", response_model=AskResponse)
 def ask(payload: AskRequest):
+    try:
+        chat_history = parse_chat_history(payload.chat_history)
 
-    chat_history = parse_chat_history(payload.chat_history)
+        answer, _, sources = ask_question(
+            rag_chain = rag_chain,
+            question = payload.question,
+            chat_history = chat_history
+        )
 
-    answer, _, sources = ask_question(
-        rag_chain = rag_chain,
-        question = payload.question,
-        chat_history = chat_history
-    )
+        # Convert sources to Source models
+        source_models = [Source(**source) for source in sources]
 
-    # Convert sources to Source models
-    source_models = [Source(**source) for source in sources]
-
-    return {"answer": answer, "sources": source_models}
+        return {"answer": answer, "sources": source_models}
+    except Exception as e:
+        error_message = str(e)
+        # Check if it's a token limit error
+        if "413" in error_message or "tokens per minute" in error_message.lower() or "rate_limit" in error_message.lower():
+            raise HTTPException(
+                status_code=413,
+                detail="Request too large. Please try asking a shorter question or wait a moment before trying again."
+            )
+        # Re-raise other errors
+        raise
 
 
 # ---------------------------
