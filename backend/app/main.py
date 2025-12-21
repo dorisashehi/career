@@ -13,15 +13,13 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
 import os
+from contextlib import asynccontextmanager
 
 from langchain_core.messages import HumanMessage, AIMessage
 
 
-app = FastAPI()
-
-
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """Initialize database tables on startup."""
     try:
         init_db()
@@ -29,6 +27,10 @@ def startup_event():
     except Exception as e:
         print(f"Warning: Could not initialize database tables: {e}")
         print("You may need to run init_db() manually or check your database connection.")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const MAX_SPEECH_TIME = 5 * 60 * 1000;
+const SILENCE_TIMEOUT = 1500; // Wait 1.5 seconds of silence before auto-submitting
 
 export function useSpeech(onTranscriptComplete?: (text: string) => void) {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -30,6 +31,8 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
     index: number;
     messageId?: string;
   } | null>(null);
+  const isManualStopRef = useRef<boolean>(false);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -47,39 +50,78 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
     if (SpeechRecognition) {
       setIsSpeechSupported(true);
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = "en-US";
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // Clear any existing silence timeout since we detected speech
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+
         let tempText = "";
-        let finalText = "";
+        let newFinalText = "";
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const text = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalText += text + " ";
+            newFinalText += text + " ";
           } else {
             tempText += text;
           }
         }
 
-        if (finalText) {
-          const cleaned = finalText.trim();
-          finalTranscriptRef.current = cleaned;
-          setTranscript(cleaned);
-        } else {
-          setTranscript(tempText);
+        // Append new final text to existing final transcript
+        if (newFinalText) {
+          finalTranscriptRef.current = (
+            finalTranscriptRef.current +
+            " " +
+            newFinalText
+          ).trim();
         }
+
+        // Display: show final transcript + any interim results
+        const displayText =
+          finalTranscriptRef.current + (tempText ? " " + tempText : "");
+        setTranscript(displayText.trim());
+
+        // Set a new timeout for auto-submission after silence
+        // This will trigger if no new speech is detected for SILENCE_TIMEOUT ms
+        silenceTimeoutRef.current = setTimeout(() => {
+          const finalText = finalTranscriptRef.current.trim();
+          if (finalText && callbackRef.current && !isManualStopRef.current) {
+            // Auto-submit after silence period
+            callbackRef.current(finalText);
+            finalTranscriptRef.current = "";
+            setTranscript("");
+            setIsRecording(false);
+            if (recognitionRef.current) {
+              recognitionRef.current.stop();
+            }
+          }
+          silenceTimeoutRef.current = null;
+        }, SILENCE_TIMEOUT);
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        // Clear silence timeout on error
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+
         setIsRecording(false);
         setTranscript("");
+        isManualStopRef.current = false; // Reset flag on error
 
         let errorMsg = "Something went wrong with speech recognition.";
+        // In continuous mode, "no-speech" errors are less critical
+        // as the user can pause and continue speaking
         if (event.error === "no-speech") {
-          errorMsg = "No speech detected. Please try again.";
+          // Don't show error for no-speech in continuous mode - user can continue speaking
+          return;
         } else if (event.error === "audio-capture") {
           errorMsg = "No microphone found. Please check your microphone.";
         } else if (event.error === "not-allowed") {
@@ -97,17 +139,25 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
       };
 
       recognition.onend = () => {
-        setIsRecording(false);
+        // Clear silence timeout if recognition ends
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+
         const finalText = finalTranscriptRef.current.trim();
-        if (finalText && callbackRef.current) {
+        // Submit if manually stopped OR if we have final text (auto-submission already handled by timeout)
+        if (isManualStopRef.current && finalText && callbackRef.current) {
           setTimeout(() => {
             callbackRef.current?.(finalText);
             finalTranscriptRef.current = "";
             setTranscript("");
           }, 100);
-        } else {
-          setTranscript("");
         }
+        // Reset state
+        setIsRecording(false);
+        setTranscript("");
+        isManualStopRef.current = false;
       };
 
       recognitionRef.current = recognition;
@@ -122,6 +172,10 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
     }
 
     return () => {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -378,7 +432,15 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
     if (!isRecording) {
       stopSpeaking();
       setTranscript("");
+      finalTranscriptRef.current = "";
       setIsRecording(true);
+      isManualStopRef.current = false;
+
+      // Clear any existing silence timeout
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
 
       try {
         if (recognitionRef.current) {
@@ -393,6 +455,15 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
         });
       }
     } else {
+      // User manually stopped recording
+      isManualStopRef.current = true;
+
+      // Clear silence timeout since user is manually stopping
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -410,6 +481,10 @@ export function useSpeech(onTranscriptComplete?: (text: string) => void) {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
       }
     };
 
