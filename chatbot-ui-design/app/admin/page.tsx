@@ -4,18 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Home,
-  Menu,
-  Search,
-  Briefcase,
-  CheckCircle,
-  XCircle,
-  Flag,
-  BookOpen,
-  TrendingUp,
-  LogOut,
-} from "lucide-react";
+import { CheckCircle, XCircle, Flag, BookOpen, TrendingUp } from "lucide-react";
+import { Header } from "@/components/header";
 import { getAdminToken, removeAdminToken, isAdminLoggedIn } from "@/lib/auth";
 import {
   getPendingExperiences,
@@ -338,49 +328,14 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-primary text-primary-foreground px-6 py-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Menu className="w-5 h-5 md:hidden" />
-            <h1 className="text-lg md:text-xl font-semibold">
-              CareerPath Admin
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 md:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Home className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Search className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Briefcase className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-              onClick={handleLogout}
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header
+        title="CareerPath Admin"
+        showLogout={true}
+        onLogout={handleLogout}
+        showCareerResources={false}
+        showHome={false}
+        showUser={true}
+      />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Tab Navigation */}
