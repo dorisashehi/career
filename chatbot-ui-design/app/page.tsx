@@ -29,7 +29,6 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeech } from "@/hooks/use-speech";
-import Link from "next/link";
 
 type Message = {
   id: string;
@@ -41,23 +40,16 @@ type Message = {
 };
 
 export default function CareerCoachChatbot() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "coach",
-      content:
-        "Hello! I'm your career coach. I'm here to help you navigate your professional journey. What would you like to discuss today?",
-      timestamp: "9:32 AM",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleSendQuestionRef = useRef<
     ((question: string) => Promise<void>) | null
   >(null);
-  const previousMessageCountRef = useRef<number>(1);
+  const previousMessageCountRef = useRef<number>(0);
   const { toast } = useToast();
+  const [showChat, setShowChat] = useState(false); // Track if chat should be visible
 
   const {
     isSpeaking,
@@ -73,6 +65,10 @@ export default function CareerCoachChatbot() {
   } = useSpeech((text: string) => {
     if (handleSendQuestionRef.current) {
       handleSendQuestionRef.current(text);
+    }
+    // Show chat after recording completes
+    if (!showChat) {
+      setShowChat(true);
     }
   });
 
@@ -96,7 +92,6 @@ export default function CareerCoachChatbot() {
 
     if (
       lastMessage?.role === "coach" &&
-      lastMessage.id !== "1" &&
       lastSpokenMessageIdRef.current !== lastMessage.id &&
       !isMuted &&
       !lastMessage.isError
@@ -120,6 +115,11 @@ export default function CareerCoachChatbot() {
     if (!question.trim()) return;
 
     stopSpeaking();
+
+    // Show chat when user sends first message
+    if (!showChat) {
+      setShowChat(true);
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -224,30 +224,48 @@ export default function CareerCoachChatbot() {
             <h1 className="text-lg md:text-xl font-semibold">CareerPath</h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
-            <Link href="/">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-primary-foreground hover:bg-primary-foreground/10"
-              >
-                <Home className="w-5 h-5" />
-              </Button>
-            </Link>
-            <Link href="/feedback">
-              <Button
-                variant="outline"
-                className="hidden md:flex bg-primary-foreground text-primary hover:bg-primary-foreground/90"
-              >
-                Share Experiences
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
+              <Home className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
+              <Search className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:bg-primary-foreground/10"
+            >
+              <Briefcase className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="outline"
+              className="hidden md:flex bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+            >
+              Career Resources
+            </Button>
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 md:py-12">
-        <div className="grid md:grid-cols-2 gap-8 items-start">
-          <div className="flex flex-col items-center justify-center space-y-6 md:sticky md:top-8">
+        <div
+          className={`${
+            showChat ? "grid md:grid-cols-2 gap-8" : "flex justify-center"
+          } items-start transition-all duration-700`}
+        >
+          <div
+            className={`flex flex-col items-center justify-center space-y-6 transition-all duration-700 ${
+              showChat ? "md:sticky md:top-8" : ""
+            }`}
+          >
             <div className="relative">
               <div className="relative w-64 h-64 md:w-80 md:h-80 overflow-hidden bg-background">
                 <img
@@ -327,221 +345,232 @@ export default function CareerCoachChatbot() {
             )}
           </div>
 
-          <div className="flex flex-col h-[600px]">
-            <Card className="flex-1 flex flex-col shadow-xl overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex flex-col ${
-                      message.role === "user" ? "items-end" : "items-start"
-                    }`}
-                  >
+          {showChat && (
+            <div className="flex flex-col h-[600px] animate-slide-in-right">
+              <Card className="flex-1 flex flex-col shadow-xl overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {messages.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-muted-foreground text-center p-8">
+                      <p className="text-lg">
+                        Starting your career coaching session...
+                      </p>
+                    </div>
+                  )}
+
+                  {messages.map((message, index) => (
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                      key={message.id}
+                      className={`flex flex-col animate-slide-in ${
+                        message.role === "user" ? "items-end" : "items-start"
                       }`}
+                      style={{ animationDelay: `${index * 100}ms` }}
                     >
-                      {message.role === "coach" && (
-                        <p className="font-semibold text-sm mb-1 text-foreground">
-                          Coach:
-                        </p>
-                      )}
-                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children }) => (
-                              <p className="mb-2 last:mb-0">{children}</p>
-                            ),
-                            strong: ({ children }) => (
-                              <strong className="font-semibold">
-                                {children}
-                              </strong>
-                            ),
-                            ul: ({ children }) => (
-                              <ul className="list-disc list-inside mb-2 space-y-1">
-                                {children}
-                              </ul>
-                            ),
-                            ol: ({ children }) => (
-                              <ol className="list-decimal list-inside mb-2 space-y-1">
-                                {children}
-                              </ol>
-                            ),
-                            li: ({ children }) => (
-                              <li className="ml-2">{children}</li>
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                      {message.role === "coach" &&
-                        message.sources &&
-                        message.sources.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-border/50">
-                            <p className="text-xs font-semibold text-foreground mb-3">
-                              Sources:
-                            </p>
-                            <div className="space-y-2">
-                              {message.sources.map((source, idx) => {
-                                const formatUpvotes = (
-                                  score: number | undefined
-                                ) => {
-                                  if (!score) return null;
-                                  if (score >= 1000) {
-                                    return `${(score / 1000).toFixed(1)}k`;
-                                  }
-                                  return score.toString();
-                                };
-
-                                const formatDate = (
-                                  dateStr: string | undefined
-                                ) => {
-                                  if (!dateStr) return null;
-                                  try {
-                                    const date = new Date(dateStr);
-                                    return date.toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                    });
-                                  } catch {
-                                    return dateStr;
-                                  }
-                                };
-
-                                return (
-                                  <a
-                                    key={idx}
-                                    href={source.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/30 transition-colors group"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        {source.source && (
-                                          <span className="text-xs font-medium text-foreground">
-                                            reddit.com/r/{source.source}
-                                          </span>
-                                        )}
-                                        {source.date && (
-                                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                            <Calendar className="w-3 h-3" />
-                                            <span>
-                                              {formatDate(source.date)}
-                                            </span>
-                                          </div>
-                                        )}
-                                        {source.score && (
-                                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                            <ThumbsUp className="w-3 h-3" />
-                                            <span>
-                                              {formatUpvotes(source.score)}{" "}
-                                              upvotes
-                                            </span>
-                                          </div>
-                                        )}
-                                        {source.num_comments && (
-                                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                            <MessageSquare className="w-3 h-3" />
-                                            <span>
-                                              {source.num_comments} comments
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </a>
-                                );
-                              })}
-                            </div>
-                          </div>
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {message.role === "coach" && (
+                          <p className="font-semibold text-sm mb-1 text-foreground">
+                            Coach:
+                          </p>
                         )}
-                    </div>
-                    <span className="text-xs text-muted-foreground mt-1 px-2">
-                      {message.timestamp}
-                    </span>
-                  </div>
-                ))}
+                        <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => (
+                                <p className="mb-2 last:mb-0">{children}</p>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className="font-semibold">
+                                  {children}
+                                </strong>
+                              ),
+                              ul: ({ children }) => (
+                                <ul className="list-disc list-inside mb-2 space-y-1">
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="list-decimal list-inside mb-2 space-y-1">
+                                  {children}
+                                </ol>
+                              ),
+                              li: ({ children }) => (
+                                <li className="ml-2">{children}</li>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                        {message.role === "coach" &&
+                          message.sources &&
+                          message.sources.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-border/50">
+                              <p className="text-xs font-semibold text-foreground mb-3">
+                                Sources:
+                              </p>
+                              <div className="space-y-2">
+                                {message.sources.map((source, idx) => {
+                                  const formatUpvotes = (
+                                    score: number | undefined
+                                  ) => {
+                                    if (!score) return null;
+                                    if (score >= 1000) {
+                                      return `${(score / 1000).toFixed(1)}k`;
+                                    }
+                                    return score.toString();
+                                  };
 
-                {isTyping && (
-                  <div className="flex items-start">
-                    <div className="bg-muted rounded-2xl px-4 py-3">
-                      <div className="flex gap-1">
-                        <div
-                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                          style={{ animationDelay: "0ms" }}
-                        />
-                        <div
-                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                          style={{ animationDelay: "150ms" }}
-                        />
-                        <div
-                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                          style={{ animationDelay: "300ms" }}
-                        />
+                                  const formatDate = (
+                                    dateStr: string | undefined
+                                  ) => {
+                                    if (!dateStr) return null;
+                                    try {
+                                      const date = new Date(dateStr);
+                                      return date.toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      });
+                                    } catch {
+                                      return dateStr;
+                                    }
+                                  };
+
+                                  return (
+                                    <a
+                                      key={idx}
+                                      href={source.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/30 transition-colors group"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          {source.source && (
+                                            <span className="text-xs font-medium text-foreground">
+                                              reddit.com/r/{source.source}
+                                            </span>
+                                          )}
+                                          {source.date && (
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                              <Calendar className="w-3 h-3" />
+                                              <span>
+                                                {formatDate(source.date)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          {source.score && (
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                              <ThumbsUp className="w-3 h-3" />
+                                              <span>
+                                                {formatUpvotes(source.score)}{" "}
+                                                upvotes
+                                              </span>
+                                            </div>
+                                          )}
+                                          {source.num_comments && (
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                              <MessageSquare className="w-3 h-3" />
+                                              <span>
+                                                {source.num_comments} comments
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                      <span className="text-xs text-muted-foreground mt-1 px-2">
+                        {message.timestamp}
+                      </span>
+                    </div>
+                  ))}
+
+                  {isTyping && (
+                    <div className="flex items-start">
+                      <div className="bg-muted rounded-2xl px-4 py-3">
+                        <div className="flex gap-1">
+                          <div
+                            className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                            style={{ animationDelay: "0ms" }}
+                          />
+                          <div
+                            className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                            style={{ animationDelay: "150ms" }}
+                          />
+                          <div
+                            className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                            style={{ animationDelay: "300ms" }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div ref={messagesEndRef} />
-              </div>
-
-              <div className="border-t border-border p-4 bg-card">
-                <div className="flex gap-2">
-                  <Input
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Ask about your career goals..."
-                    className="flex-1 text-base"
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    size="icon"
-                    className="bg-primary hover:bg-primary/90"
-                    disabled={!inputValue.trim()}
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+                  <div ref={messagesEndRef} />
                 </div>
-              </div>
-            </Card>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setInputValue("How do I negotiate a better salary?")
-                }
-              >
-                Salary Tips
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setInputValue("I want to change careers")}
-              >
-                Career Change
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setInputValue("Help me prepare for an interview")
-                }
-              >
-                Interview Prep
-              </Button>
+                <div className="border-t border-border p-4 bg-card">
+                  <div className="flex gap-2">
+                    <Input
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Ask about your career goals..."
+                      className="flex-1 text-base"
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      size="icon"
+                      className="bg-primary hover:bg-primary/90"
+                      disabled={!inputValue.trim()}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setInputValue("How do I negotiate a better salary?")
+                  }
+                >
+                  Salary Tips
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setInputValue("I want to change careers")}
+                >
+                  Career Change
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setInputValue("Help me prepare for an interview")
+                  }
+                >
+                  Interview Prep
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>
