@@ -41,6 +41,7 @@ export default function CareerCoachChatbot() {
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastCoachMessageRef = useRef<HTMLDivElement>(null);
   const handleSendQuestionRef = useRef<
     ((question: string) => Promise<void>) | null
   >(null);
@@ -74,14 +75,32 @@ export default function CareerCoachChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const scrollToCoachMessage = () => {
+    lastCoachMessageRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
   useEffect(() => {
     if (messages.length > previousMessageCountRef.current) {
-      const timeoutId = setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      const lastMessage = messages[messages.length - 1];
 
-      previousMessageCountRef.current = messages.length;
-      return () => clearTimeout(timeoutId);
+      // If the last message is from coach, scroll to the beginning of it
+      if (lastMessage?.role === "coach") {
+        const timeoutId = setTimeout(() => {
+          scrollToCoachMessage();
+        }, 100);
+        previousMessageCountRef.current = messages.length;
+        return () => clearTimeout(timeoutId);
+      } else {
+        // For user messages, scroll to bottom
+        const timeoutId = setTimeout(() => {
+          scrollToBottom();
+        }, 100);
+        previousMessageCountRef.current = messages.length;
+        return () => clearTimeout(timeoutId);
+      }
     }
   }, [messages.length]);
 
@@ -402,145 +421,154 @@ export default function CareerCoachChatbot() {
                     </div>
                   )}
 
-                  {messages.map((message, index) => (
-                    <div
-                      key={message.id}
-                      className={`flex flex-col animate-slide-in ${
-                        message.role === "user" ? "items-end" : "items-start"
-                      }`}
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
+                  {messages.map((message, index) => {
+                    const isLastCoachMessage =
+                      message.role === "coach" && index === messages.length - 1;
+
+                    return (
                       <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                          message.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground"
+                        key={message.id}
+                        ref={isLastCoachMessage ? lastCoachMessageRef : null}
+                        className={`flex flex-col animate-slide-in ${
+                          message.role === "user" ? "items-end" : "items-start"
                         }`}
+                        style={{ animationDelay: `${index * 100}ms` }}
                       >
-                        {message.role === "coach" && (
-                          <p className="font-semibold text-sm mb-1 text-foreground">
-                            Coach:
-                          </p>
-                        )}
-                        <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                          <ReactMarkdown
-                            components={{
-                              p: ({ children }) => (
-                                <p className="mb-2 last:mb-0">{children}</p>
-                              ),
-                              strong: ({ children }) => (
-                                <strong className="font-semibold">
-                                  {children}
-                                </strong>
-                              ),
-                              ul: ({ children }) => (
-                                <ul className="list-disc list-inside mb-2 space-y-1">
-                                  {children}
-                                </ul>
-                              ),
-                              ol: ({ children }) => (
-                                <ol className="list-decimal list-inside mb-2 space-y-1">
-                                  {children}
-                                </ol>
-                              ),
-                              li: ({ children }) => (
-                                <li className="ml-2">{children}</li>
-                              ),
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
-                        {message.role === "coach" &&
-                          message.sources &&
-                          message.sources.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-border/50">
-                              <p className="text-xs font-semibold text-foreground mb-3">
-                                Sources:
-                              </p>
-                              <div className="space-y-2">
-                                {message.sources.map((source, idx) => {
-                                  const formatUpvotes = (
-                                    score: number | undefined
-                                  ) => {
-                                    if (!score) return null;
-                                    if (score >= 1000) {
-                                      return `${(score / 1000).toFixed(1)}k`;
-                                    }
-                                    return score.toString();
-                                  };
-
-                                  const formatDate = (
-                                    dateStr: string | undefined
-                                  ) => {
-                                    if (!dateStr) return null;
-                                    try {
-                                      const date = new Date(dateStr);
-                                      return date.toLocaleDateString("en-US", {
-                                        year: "numeric",
-                                        month: "short",
-                                        day: "numeric",
-                                      });
-                                    } catch {
-                                      return dateStr;
-                                    }
-                                  };
-
-                                  return (
-                                    <a
-                                      key={idx}
-                                      href={source.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/30 transition-colors group"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          {source.source && (
-                                            <span className="text-xs font-medium text-foreground">
-                                              reddit.com/r/{source.source}
-                                            </span>
-                                          )}
-                                          {source.date && (
-                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                              <Calendar className="w-3 h-3" />
-                                              <span>
-                                                {formatDate(source.date)}
-                                              </span>
-                                            </div>
-                                          )}
-                                          {source.score && (
-                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                              <ThumbsUp className="w-3 h-3" />
-                                              <span>
-                                                {formatUpvotes(source.score)}{" "}
-                                                upvotes
-                                              </span>
-                                            </div>
-                                          )}
-                                          {source.num_comments && (
-                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                              <MessageSquare className="w-3 h-3" />
-                                              <span>
-                                                {source.num_comments} comments
-                                              </span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </a>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                            message.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {message.role === "coach" && (
+                            <p className="font-semibold text-sm mb-1 text-foreground">
+                              Coach:
+                            </p>
                           )}
+                          <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => (
+                                  <p className="mb-2 last:mb-0">{children}</p>
+                                ),
+                                strong: ({ children }) => (
+                                  <strong className="font-semibold">
+                                    {children}
+                                  </strong>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="list-disc list-inside mb-2 space-y-1">
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="list-decimal list-inside mb-2 space-y-1">
+                                    {children}
+                                  </ol>
+                                ),
+                                li: ({ children }) => (
+                                  <li className="ml-2">{children}</li>
+                                ),
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                          {message.role === "coach" &&
+                            message.sources &&
+                            message.sources.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-border/50">
+                                <p className="text-xs font-semibold text-foreground mb-3">
+                                  Sources:
+                                </p>
+                                <div className="space-y-2">
+                                  {message.sources.map((source, idx) => {
+                                    const formatUpvotes = (
+                                      score: number | undefined
+                                    ) => {
+                                      if (!score) return null;
+                                      if (score >= 1000) {
+                                        return `${(score / 1000).toFixed(1)}k`;
+                                      }
+                                      return score.toString();
+                                    };
+
+                                    const formatDate = (
+                                      dateStr: string | undefined
+                                    ) => {
+                                      if (!dateStr) return null;
+                                      try {
+                                        const date = new Date(dateStr);
+                                        return date.toLocaleDateString(
+                                          "en-US",
+                                          {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                          }
+                                        );
+                                      } catch {
+                                        return dateStr;
+                                      }
+                                    };
+
+                                    return (
+                                      <a
+                                        key={idx}
+                                        href={source.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/30 transition-colors group"
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            {source.source && (
+                                              <span className="text-xs font-medium text-foreground">
+                                                reddit.com/r/{source.source}
+                                              </span>
+                                            )}
+                                            {source.date && (
+                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <Calendar className="w-3 h-3" />
+                                                <span>
+                                                  {formatDate(source.date)}
+                                                </span>
+                                              </div>
+                                            )}
+                                            {source.score && (
+                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <ThumbsUp className="w-3 h-3" />
+                                                <span>
+                                                  {formatUpvotes(source.score)}{" "}
+                                                  upvotes
+                                                </span>
+                                              </div>
+                                            )}
+                                            {source.num_comments && (
+                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <MessageSquare className="w-3 h-3" />
+                                                <span>
+                                                  {source.num_comments} comments
+                                                </span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                        <span className="text-xs text-muted-foreground mt-1 px-2">
+                          {message.timestamp}
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground mt-1 px-2">
-                        {message.timestamp}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {isTyping && (
                     <div className="flex items-start">
