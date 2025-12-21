@@ -276,8 +276,8 @@ export default function CareerCoachChatbot() {
               </div>
               <p className="text-muted-foreground">Senior Career Coach</p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                15+ years helping professionals find their path and achieve
-                their career goals
+                Your AI coach trained on real Reddit discussions and user
+                experiences
               </p>
             </div>
 
