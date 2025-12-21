@@ -37,14 +37,25 @@ type Message = {
 };
 
 export default function CareerCoachChatbot() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "1",
+      role: "coach",
+      content:
+        "Hello! I'm your career coach. I'm here to help you navigate your professional journey. What would you like to discuss today?",
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    },
+  ]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleSendQuestionRef = useRef<
     ((question: string) => Promise<void>) | null
   >(null);
-  const previousMessageCountRef = useRef<number>(0);
+  const previousMessageCountRef = useRef<number>(1);
   const { toast } = useToast();
   const [showChat, setShowChat] = useState(false); // Track if chat should be visible
 
@@ -89,6 +100,7 @@ export default function CareerCoachChatbot() {
 
     if (
       lastMessage?.role === "coach" &&
+      lastMessage.id !== "1" &&
       lastSpokenMessageIdRef.current !== lastMessage.id &&
       !isMuted &&
       !lastMessage.isError

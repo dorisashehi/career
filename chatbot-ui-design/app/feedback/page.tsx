@@ -5,8 +5,9 @@ import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Home, Search, Briefcase, Menu, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Header } from "@/components/header";
 import { useToast } from "@/hooks/use-toast";
 
 export default function UserFeedback() {
@@ -87,51 +88,12 @@ export default function UserFeedback() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="bg-primary text-primary-foreground px-6 py-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Menu className="w-5 h-5 md:hidden" />
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-accent rounded-sm flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-accent-foreground" />
-              </div>
-              <h1 className="text-lg md:text-xl font-semibold">CareerPath</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 md:gap-4">
-            <Link href="/">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-primary-foreground hover:bg-primary-foreground/10"
-              >
-                <Home className="w-5 h-5" />
-              </Button>
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Search className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-            >
-              <Briefcase className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="outline"
-              className="hidden md:flex bg-primary-foreground text-primary hover:bg-primary-foreground/90"
-            >
-              Career Resources
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header
+        showLogo={true}
+        showCareerResources={false}
+        showSearch={false}
+        showBriefcase={false}
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8 md:py-12">
