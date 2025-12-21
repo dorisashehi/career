@@ -37,27 +37,17 @@ type Message = {
 };
 
 export default function CareerCoachChatbot() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "coach",
-      content:
-        "Hello! I'm your career coach. I'm here to help you navigate your professional journey. What would you like to discuss today?",
-      timestamp: new Date().toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleSendQuestionRef = useRef<
     ((question: string) => Promise<void>) | null
   >(null);
-  const previousMessageCountRef = useRef<number>(1);
+  const previousMessageCountRef = useRef<number>(0);
   const { toast } = useToast();
   const [showChat, setShowChat] = useState(false); // Track if chat should be visible
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const {
     isSpeaking,
@@ -100,7 +90,6 @@ export default function CareerCoachChatbot() {
 
     if (
       lastMessage?.role === "coach" &&
-      lastMessage.id !== "1" &&
       lastSpokenMessageIdRef.current !== lastMessage.id &&
       !isMuted &&
       !lastMessage.isError
@@ -110,6 +99,61 @@ export default function CareerCoachChatbot() {
       speakText(lastMessage.content, lastMessage.id);
     }
   }, [messages, isMuted, speakText, stopSpeaking]);
+
+  // Preload video on mount
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.load(); // Preload the video
+    }
+  }, []);
+
+  // Control video playback based on speaking state
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isSpeaking) {
+      // Ensure video is loaded before playing
+      const playVideo = () => {
+        video.currentTime = 0;
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              // Video is playing
+            })
+            .catch((error) => {
+              console.log("Video play error:", error);
+              // Try again after a short delay
+              setTimeout(() => {
+                video.play().catch((e) => console.log("Retry play error:", e));
+              }, 100);
+            });
+        }
+      };
+
+      if (video.readyState >= 2) {
+        // HAVE_CURRENT_DATA or higher - video is ready
+        playVideo();
+      } else {
+        // Wait for video to be ready
+        const handleCanPlay = () => {
+          playVideo();
+          video.removeEventListener("canplay", handleCanPlay);
+        };
+        video.addEventListener("canplay", handleCanPlay);
+        video.load(); // Ensure video loads
+
+        return () => {
+          video.removeEventListener("canplay", handleCanPlay);
+        };
+      }
+    } else {
+      video.pause();
+      video.currentTime = 0; // Reset to first frame
+    }
+  }, [isSpeaking]);
 
   const convertMessagesToApiFormat = (msgs: Message[]): ApiChatMessage[] => {
     const messagesToSend = msgs.filter((msg) => msg.id !== "1");
@@ -226,7 +270,7 @@ export default function CareerCoachChatbot() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header showCareerResources={true} />
+      <Header showCareerResources={false} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 md:py-12">
         <div
@@ -241,16 +285,44 @@ export default function CareerCoachChatbot() {
           >
             <div className="relative">
               <div className="relative w-64 h-64 md:w-80 md:h-80 overflow-hidden bg-background">
-                <img
-                  src={
-                    isSpeaking ? "/avatar/animation.gif" : "/avatar/photo.png"
-                  }
-                  alt="Career Coach Avatar"
-                  className={`w-full h-full object-center transition-all duration-300 ${
-                    isSpeaking
-                      ? "object-cover scale-110"
-                      : "object-contain scale-100"
+                {/* Video for speaking state */}
+                <video
+                  ref={videoRef}
+                  src="/avatar/Short_Video_Generation_Request.mp4"
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 border-none ${
+                    isSpeaking ? "opacity-100 scale-110" : "opacity-0 scale-100"
                   }`}
+                  style={{
+                    objectPosition: "center",
+                    border: "none",
+                    outline: "none",
+                  }}
+                  onLoadedData={() => {
+                    // Video is loaded and ready
+                    if (isSpeaking && videoRef.current) {
+                      videoRef.current.currentTime = 0;
+                      videoRef.current.play().catch((e) => {
+                        console.log("Video play error:", e);
+                      });
+                    }
+                  }}
+                />
+                {/* Static image for non-speaking state */}
+                <img
+                  src="/avatar/avatar.png"
+                  alt="Career Coach Avatar"
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 border-none ${
+                    isSpeaking ? "opacity-0 scale-110" : "opacity-100 scale-100"
+                  }`}
+                  style={{
+                    objectPosition: "center",
+                    border: "none",
+                    outline: "none",
+                  }}
                 />
               </div>
             </div>
