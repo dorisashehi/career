@@ -3,27 +3,29 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* New color scheme inspired by professional career coaching aesthetic */
+/* Claude-inspired color scheme - warm beige background with muted red-orange accent */
 :root {
-  --background: oklch(0.98 0.005 264);
-  --foreground: oklch(0.25 0.01 264);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.25 0.01 264);
+  --background: oklch(0.99 0.002 85); /* Warm off-white/beige like Claude */
+  --foreground: oklch(0.25 0.01 0); /* Dark grey text */
+  --card: oklch(1 0 0); /* Pure white cards */
+  --card-foreground: oklch(0.25 0.01 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.25 0.01 264);
-  --primary: oklch(0.45 0.15 264);
-  --primary-foreground: oklch(0.98 0.005 264);
-  --secondary: oklch(0.95 0.01 264);
-  --secondary-foreground: oklch(0.25 0.01 264);
-  --muted: oklch(0.96 0.005 264);
-  --muted-foreground: oklch(0.55 0.01 264);
-  --accent: oklch(0.62 0.19 145);
-  --accent-foreground: oklch(0.98 0.005 264);
+  --popover-foreground: oklch(0.25 0.01 0);
+  --primary: oklch(0.65 0.12 35); /* Muted red-orange/burnt orange accent */
+  --primary-foreground: oklch(0.99 0.002 85);
+  --secondary: oklch(0.97 0.005 85); /* Light grey for secondary elements */
+  --secondary-foreground: oklch(0.25 0.01 0);
+  --muted: oklch(
+    0.96 0.003 85
+  ); /* Slightly darker beige for muted backgrounds */
+  --muted-foreground: oklch(0.55 0.01 0); /* Muted grey text */
+  --accent: oklch(0.65 0.12 35); /* Same as primary for consistency */
+  --accent-foreground: oklch(0.99 0.002 85);
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.98 0.005 264);
-  --border: oklch(0.92 0.005 264);
-  --input: oklch(0.92 0.005 264);
-  --ring: oklch(0.45 0.15 264);
+  --destructive-foreground: oklch(0.99 0.002 85);
+  --border: oklch(0.94 0.003 85); /* Subtle border */
+  --input: oklch(0.97 0.003 85); /* Light grey input background */
+  --ring: oklch(0.65 0.12 35); /* Focus ring in accent color */
   --chart-1: oklch(0.45 0.15 264);
   --chart-2: oklch(0.62 0.19 145);
   --chart-3: oklch(0.7 0.14 85);
@@ -41,25 +43,27 @@
 }
 
 .dark {
-  --background: oklch(0.15 0.01 264);
-  --foreground: oklch(0.95 0.005 264);
-  --card: oklch(0.18 0.01 264);
-  --card-foreground: oklch(0.95 0.005 264);
-  --popover: oklch(0.18 0.01 264);
-  --popover-foreground: oklch(0.95 0.005 264);
-  --primary: oklch(0.55 0.18 264);
-  --primary-foreground: oklch(0.95 0.005 264);
-  --secondary: oklch(0.25 0.01 264);
-  --secondary-foreground: oklch(0.95 0.005 264);
-  --muted: oklch(0.22 0.01 264);
-  --muted-foreground: oklch(0.65 0.01 264);
-  --accent: oklch(0.72 0.19 145);
-  --accent-foreground: oklch(0.15 0.01 264);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.95 0.005 264);
-  --border: oklch(0.28 0.01 264);
-  --input: oklch(0.28 0.01 264);
-  --ring: oklch(0.55 0.18 264);
+  --background: oklch(
+    0.18 0.01 0
+  ); /* Dark grey background like Claude sidebar */
+  --foreground: oklch(0.95 0.005 0); /* Light text */
+  --card: oklch(0.22 0.01 0); /* Slightly lighter than background */
+  --card-foreground: oklch(0.95 0.005 0);
+  --popover: oklch(0.22 0.01 0);
+  --popover-foreground: oklch(0.95 0.005 0);
+  --primary: oklch(0.7 0.12 35); /* Brighter red-orange for dark mode */
+  --primary-foreground: oklch(0.18 0.01 0);
+  --secondary: oklch(0.25 0.01 0); /* Dark grey */
+  --secondary-foreground: oklch(0.95 0.005 0);
+  --muted: oklch(0.25 0.01 0); /* Dark muted background */
+  --muted-foreground: oklch(0.7 0.01 0); /* Lighter muted text */
+  --accent: oklch(0.7 0.12 35); /* Same as primary */
+  --accent-foreground: oklch(0.18 0.01 0);
+  --destructive: oklch(0.6 0.2 27);
+  --destructive-foreground: oklch(0.95 0.005 0);
+  --border: oklch(0.3 0.01 0); /* Subtle border */
+  --input: oklch(0.25 0.01 0); /* Dark input background */
+  --ring: oklch(0.7 0.12 35); /* Focus ring */
   --chart-1: oklch(0.55 0.18 264);
   --chart-2: oklch(0.72 0.19 145);
   --chart-3: oklch(0.8 0.14 85);
@@ -126,7 +130,9 @@
   }
 }
 
-/* Adding custom animations for speaking avatar */
+/* Claude-inspired animations - subtle and professional */
+
+/* Speaking avatar animation */
 @keyframes speak {
   0%,
   100% {
@@ -137,20 +143,165 @@
   }
 }
 
+/* Gentle pulse for interactive elements */
 @keyframes pulse-glow {
   0%,
   100% {
-    opacity: 0.5;
+    opacity: 0.6;
   }
   50% {
     opacity: 1;
   }
 }
 
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slide in from right (for chat panel) */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Page entrance animation - slide up and fade in */
+@keyframes page-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Gentle scale on hover */
+@keyframes gentle-scale {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+/* Subtle shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Twinkling effect for special elements */
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Smooth bounce for buttons */
+@keyframes button-press {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Utility animation classes */
 .animate-speak {
   animation: speak 0.6s ease-in-out infinite;
 }
 
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-page-entrance {
+  animation: page-entrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animate-gentle-scale {
+  animation: gentle-scale 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.animate-button-press {
+  animation: button-press 0.2s ease-out;
+}
+
+/* Smooth transitions for interactive elements */
+.smooth-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.smooth-hover:hover {
+  transform: translateY(-1px);
+}
+
+/* Claude-style button hover effect */
+.claude-button-hover {
+  transition: all 0.2s ease;
+}
+
+.claude-button-hover:hover {
+  background-color: oklch(0.65 0.12 35 / 0.1);
+  transform: scale(1.02);
+}
+
+.claude-button-hover:active {
+  transform: scale(0.98);
+  animation: button-press 0.2s ease-out;
 }

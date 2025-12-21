@@ -288,10 +288,15 @@ export default function CareerCoachChatbot() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header showCareerResources={false} />
+    <div className="h-screen bg-background flex flex-col overflow-y-hidden">
+      <div className="animate-fade-in">
+        <Header showCareerResources={true} />
+      </div>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 md:py-12">
+      <main
+        className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 md:py-12 animate-page-entrance"
+        style={{ animationDelay: "0.1s" }}
+      >
         <div
           className={`${
             showChat ? "grid md:grid-cols-2 gap-8" : "flex justify-center"
@@ -375,10 +380,10 @@ export default function CareerCoachChatbot() {
             <Button
               onClick={handleStartRecording}
               disabled={!isSpeechSupported}
-              className={`px-8 py-3 text-base font-medium ${
+              className={`px-8 py-3 text-base font-medium smooth-hover transition-all duration-200 ${
                 isRecording
-                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-pulse-glow"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md hover:scale-105 active:scale-95"
               }`}
             >
               {isRecording ? (
@@ -429,16 +434,16 @@ export default function CareerCoachChatbot() {
                       <div
                         key={message.id}
                         ref={isLastCoachMessage ? lastCoachMessageRef : null}
-                        className={`flex flex-col animate-slide-in ${
+                        className={`flex flex-col animate-fade-in smooth-hover ${
                           message.role === "user" ? "items-end" : "items-start"
                         }`}
-                        style={{ animationDelay: `${index * 100}ms` }}
+                        style={{ animationDelay: `${index * 50}ms` }}
                       >
                         <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 transition-all duration-200 ${
                             message.role === "user"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground"
+                              ? "bg-primary text-primary-foreground shadow-sm hover:shadow-md"
+                              : "bg-muted text-muted-foreground shadow-sm hover:shadow-md border border-border/30"
                           }`}
                         >
                           {message.role === "coach" && (
@@ -519,7 +524,7 @@ export default function CareerCoachChatbot() {
                                         href={source.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/30 transition-colors group"
+                                        className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/50 smooth-hover shadow-sm hover:shadow-md transition-all duration-200 group"
                                       >
                                         <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
                                         <div className="flex-1 min-w-0">
@@ -571,19 +576,19 @@ export default function CareerCoachChatbot() {
                   })}
 
                   {isTyping && (
-                    <div className="flex items-start">
-                      <div className="bg-muted rounded-2xl px-4 py-3">
+                    <div className="flex items-start animate-fade-in">
+                      <div className="bg-muted rounded-2xl px-4 py-3 shadow-sm border border-border/30">
                         <div className="flex gap-1">
                           <div
-                            className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                            className="w-2 h-2 bg-primary rounded-full animate-bounce"
                             style={{ animationDelay: "0ms" }}
                           />
                           <div
-                            className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                            className="w-2 h-2 bg-primary rounded-full animate-bounce"
                             style={{ animationDelay: "150ms" }}
                           />
                           <div
-                            className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                            className="w-2 h-2 bg-primary rounded-full animate-bounce"
                             style={{ animationDelay: "300ms" }}
                           />
                         </div>
@@ -622,6 +627,7 @@ export default function CareerCoachChatbot() {
                   onClick={() =>
                     setInputValue("How do I negotiate a better salary?")
                   }
+                  className="border-border/50 hover:border-primary/50 hover:bg-primary/5 smooth-hover shadow-sm hover:shadow-md transition-all duration-200"
                 >
                   Salary Tips
                 </Button>
@@ -629,6 +635,7 @@ export default function CareerCoachChatbot() {
                   variant="outline"
                   size="sm"
                   onClick={() => setInputValue("I want to change careers")}
+                  className="border-border/50 hover:border-primary/50 hover:bg-primary/5 smooth-hover shadow-sm hover:shadow-md transition-all duration-200"
                 >
                   Career Change
                 </Button>
@@ -638,6 +645,7 @@ export default function CareerCoachChatbot() {
                   onClick={() =>
                     setInputValue("Help me prepare for an interview")
                   }
+                  className="border-border/50 hover:border-primary/50 hover:bg-primary/5 smooth-hover shadow-sm hover:shadow-md transition-all duration-200"
                 >
                   Interview Prep
                 </Button>

@@ -328,18 +328,21 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header
-        title="CareerPath Admin"
-        showLogout={true}
-        onLogout={handleLogout}
-        showCareerResources={false}
-        showHome={false}
-        showUser={true}
-      />
+      <div className="animate-fade-in">
+        <Header
+          title="CareerPath Admin"
+          showLogout={true}
+          onLogout={handleLogout}
+          showCareerResources={false}
+        />
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 pb-16">
         {/* Tab Navigation */}
-        <div className="flex gap-4 mb-8 border-b border-border">
+        <div
+          className="flex gap-4 mb-8 border-b border-border animate-page-entrance"
+          style={{ animationDelay: "0.1s" }}
+        >
           <button
             onClick={() => setActiveTab("flagged")}
             className={`px-6 py-3 font-medium transition-colors ${
@@ -370,7 +373,10 @@ export default function AdminDashboard() {
 
         {/* Flagged Content Tab */}
         {activeTab === "flagged" && (
-          <div className="space-y-4">
+          <div
+            className="space-y-4 animate-page-entrance"
+            style={{ animationDelay: "0.2s" }}
+          >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-foreground">
                 Pending User Experiences
@@ -518,7 +524,10 @@ export default function AdminDashboard() {
 
         {/* Advice Library Tab */}
         {activeTab === "advice" && (
-          <div className="space-y-4">
+          <div
+            className="space-y-4 animate-page-entrance"
+            style={{ animationDelay: "0.2s" }}
+          >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-foreground">
                 Career Advice Library

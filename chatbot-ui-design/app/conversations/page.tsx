@@ -94,10 +94,15 @@ export default function SavedConversations() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header showCareerResources={false} />
+      <div className="animate-fade-in">
+        <Header showCareerResources={false} />
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
+        <div
+          className="mb-8 animate-page-entrance"
+          style={{ animationDelay: "0.1s" }}
+        >
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Saved Conversations
           </h1>
@@ -107,7 +112,10 @@ export default function SavedConversations() {
         </div>
 
         {/* Search Bar */}
-        <div className="mb-6">
+        <div
+          className="mb-6 animate-page-entrance"
+          style={{ animationDelay: "0.2s" }}
+        >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
@@ -121,7 +129,10 @@ export default function SavedConversations() {
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-page-entrance"
+          style={{ animationDelay: "0.3s" }}
+        >
           <Card className="p-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-primary/10 text-primary">
@@ -169,7 +180,10 @@ export default function SavedConversations() {
         </div>
 
         {/* Conversations List */}
-        <div className="space-y-4">
+        <div
+          className="space-y-4 animate-page-entrance"
+          style={{ animationDelay: "0.4s" }}
+        >
           {filteredConversations.length === 0 ? (
             <Card className="p-12 text-center">
               <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Home, Briefcase, Menu, LogOut, User } from "lucide-react";
+import { Home, Briefcase, Menu, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -10,19 +10,15 @@ interface HeaderProps {
   showLogo?: boolean;
   showCareerResources?: boolean;
   showLogout?: boolean;
-  showHome?: boolean;
-  showUser?: boolean;
   onLogout?: () => void;
   className?: string;
 }
 
 export function Header({
   title = "CareerPath",
-  showLogo = false,
+  showLogo = true,
   showCareerResources = true,
   showLogout = false,
-  showHome = true,
-  showUser = false,
   onLogout,
   className = "",
 }: HeaderProps) {
@@ -36,49 +32,42 @@ export function Header({
 
   return (
     <header
-      className={`bg-primary text-primary-foreground px-6 py-4 rounded-b-3xl shadow-lg ${className}`}
+      className={`px-6 py-4 rounded-b-3xl shadow-sm border-b border-white/20 ${className}`}
+      style={{ backgroundColor: "lab(58.4127% 35.0187 29.1238)" }}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Menu className="w-5 h-5 md:hidden" />
+          <Menu className="w-5 h-5 md:hidden text-white" />
           {showLogo ? (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-accent rounded-sm flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-accent-foreground" />
+              <div className="w-8 h-8 bg-white/20 rounded-sm flex items-center justify-center">
+                <Briefcase className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-lg md:text-xl font-semibold">{title}</h1>
+              <h1 className="text-lg md:text-xl font-semibold text-white">
+                {title}
+              </h1>
             </div>
           ) : (
-            <h1 className="text-lg md:text-xl font-semibold">{title}</h1>
+            <h1 className="text-lg md:text-xl font-semibold text-white">
+              {title}
+            </h1>
           )}
         </div>
         <div className="flex items-center gap-2 md:gap-4">
-          {showHome && (
-            <Link href="/">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-primary-foreground hover:bg-primary-foreground/10"
-              >
-                <Home className="w-5 h-5" />
-              </Button>
-            </Link>
-          )}
-          {showUser && (
+          <Link href="/">
             <Button
               variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-              title="User"
+              className="text-white hover:bg-white/10 smooth-hover claude-button-hover flex items-center gap-2"
             >
-              <User className="w-5 h-5" />
+              <Home className="w-5 h-5" />
+              <span className="hidden md:inline">Home</span>
             </Button>
-          )}
+          </Link>
           {showLogout && (
             <Button
               variant="ghost"
               size="icon"
-              className="text-primary-foreground hover:bg-primary-foreground/10"
+              className="text-white hover:bg-white/10"
               onClick={handleLogout}
               title="Logout"
             >
@@ -89,9 +78,9 @@ export function Header({
             <Link href="/feedback">
               <Button
                 variant="outline"
-                className="hidden md:flex bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                className="hidden md:flex bg-white/10 text-white hover:bg-white/20 border-white/30 smooth-hover shadow-sm backdrop-blur-sm"
               >
-                Share Experience
+                Share Experiences
               </Button>
             </Link>
           )}

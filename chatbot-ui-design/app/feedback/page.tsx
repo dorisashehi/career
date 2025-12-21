@@ -5,8 +5,6 @@ import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { Header } from "@/components/header";
 import { useToast } from "@/hooks/use-toast";
 
@@ -87,26 +85,18 @@ export default function UserFeedback() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header
-        showLogo={true}
-        showCareerResources={false}
-        showSearch={false}
-        showBriefcase={false}
-      />
+    <div className="min-h-screen bg-background">
+      <div className="animate-fade-in">
+        <Header showLogo={true} showCareerResources={false} />
+      </div>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8 md:py-12">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-primary hover:underline mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Chat
-        </Link>
-
+      <main className="max-w-4xl w-full mx-auto px-4 py-8 md:py-12 pb-16">
         <div className="space-y-6">
-          <div className="text-center space-y-2">
+          <div
+            className="text-center space-y-2 animate-page-entrance"
+            style={{ animationDelay: "0.1s" }}
+          >
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">
               Share Your Experience
             </h1>
@@ -116,7 +106,10 @@ export default function UserFeedback() {
             </p>
           </div>
 
-          <Card className="p-6 md:p-8 shadow-xl">
+          <Card
+            className="p-6 md:p-8 shadow-xl animate-page-entrance"
+            style={{ animationDelay: "0.2s" }}
+          >
             {isSubmitted ? (
               <div className="text-center py-12 space-y-4">
                 <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mx-auto">
@@ -219,17 +212,26 @@ export default function UserFeedback() {
           </Card>
 
           <div className="grid md:grid-cols-3 gap-4 mt-8">
-            <Card className="p-6 text-center">
+            <Card
+              className="p-6 text-center animate-page-entrance"
+              style={{ animationDelay: "0.3s" }}
+            >
               <div className="text-3xl font-bold text-primary mb-2">1,247</div>
               <p className="text-sm text-muted-foreground">
                 Experiences Shared
               </p>
             </Card>
-            <Card className="p-6 text-center">
+            <Card
+              className="p-6 text-center animate-page-entrance"
+              style={{ animationDelay: "0.4s" }}
+            >
               <div className="text-3xl font-bold text-accent mb-2">8</div>
               <p className="text-sm text-muted-foreground">Categories</p>
             </Card>
-            <Card className="p-6 text-center">
+            <Card
+              className="p-6 text-center animate-page-entrance"
+              style={{ animationDelay: "0.5s" }}
+            >
               <div className="text-3xl font-bold text-chart-3 mb-2">100%</div>
               <p className="text-sm text-muted-foreground">Anonymous</p>
             </Card>
