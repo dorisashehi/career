@@ -2,7 +2,7 @@
 Database configuration and session management.
 
 Provides database engine, session factory, and initialization functions
-for the CareerPath application using PostgreSQL with pgvector extension.
+for the 404ella application using PostgreSQL with pgvector extension.
 """
 import os
 from sqlalchemy import create_engine, text

@@ -1,4 +1,4 @@
-# CareerPath System Architecture
+# 404ella System Architecture
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@
 
 ## System Overview
 
-CareerPath is an AI-powered career advice application that uses **Retrieval-Augmented Generation (RAG)** to provide contextual answers based on real experiences from Reddit and user-submitted content.
+404ella is an AI-powered career advice application that uses **Retrieval-Augmented Generation (RAG)** to provide contextual answers based on real experiences from Reddit and user-submitted content.
 
 ### Core Capabilities
 

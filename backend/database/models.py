@@ -1,5 +1,5 @@
 """
-Database models for CareerPath application.
+Database models for 404ella application.
 
 Defines SQLAlchemy models for:
 - Post: Reddit posts with embeddings

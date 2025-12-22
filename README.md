@@ -1,12 +1,12 @@
-# 🚀 CareerPath - Your AI-Powered Tech Career Advisor
+# 🚀 404ella - Your AI-Powered Tech Career Advisor
 
 > **Get instant, personalized career advice for technology professionals powered by real experiences from thousands of developers, engineers, and tech workers.**
 
-CareerPath is an intelligent career advice platform **exclusively focused on technology careers** that combines the wisdom of Reddit communities with cutting-edge AI to help you navigate your tech career journey. Ask any technology career question about software engineering, data science, IT, cloud computing, DevOps, cybersecurity, or related tech fields and get comprehensive answers backed by real experiences from professionals who've been there.
+404ella is an intelligent career advice platform **exclusively focused on technology careers** that combines the wisdom of Reddit communities with cutting-edge AI to help you navigate your tech career journey. Ask any technology career question about software engineering, data science, IT, cloud computing, DevOps, cybersecurity, or related tech fields and get comprehensive answers backed by real experiences from professionals who've been there.
 
 ---
 
-## ✨ What Makes CareerPath Special?
+## ✨ What Makes 404ella Special?
 
 ### 🤖 **AI-Powered Intelligence**
 
@@ -317,7 +317,7 @@ This project is licensed under the MIT License.
 
 ## 🗺️ Coming Soon
 
-We're constantly improving CareerPath! Here's what's coming next:
+We're constantly improving 404ella! Here's what's coming next:
 
 ### 🔍 **Admin Activity Log**
 
@@ -343,11 +343,11 @@ Perfect for:
 
 ---
 
-## 💡 Why CareerPath?
+## 💡 Why 404ella?
 
 **Traditional career advice sites** give you generic articles that may or may not apply to your situation.
 
-**CareerPath** gives you:
+**404ella** gives you:
 
 - ✅ Answers based on **real tech career experiences** from professionals like you
 - ✅ **Multiple tech perspectives** synthesized into one comprehensive answer

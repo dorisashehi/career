@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="CareerPath API",
+    title="404ella API",
     description="""
     Career advice chatbot API with RAG (Retrieval-Augmented Generation) system.
 
@@ -69,7 +69,7 @@ app = FastAPI(
     openapi_url="/openapi.json",
     lifespan=lifespan,
     contact={
-        "name": "CareerPath API Support",
+        "name": "404ella API Support",
     },
     license_info={
         "name": "MIT",

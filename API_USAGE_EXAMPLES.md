@@ -1,6 +1,6 @@
 # API Usage Examples
 
-This document provides practical examples for using the CareerPath API. All examples assume the API is running at `http://localhost:8000` (development) or your production URL.
+This document provides practical examples for using the 404ella API. All examples assume the API is running at `http://localhost:8000` (development) or your production URL.
 
 ## Table of Contents
 
@@ -872,7 +872,7 @@ const handleApiRequest = async <T>(
 import requests
 from typing import List, Dict
 
-class CareerPathClient:
+class Client404ella:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.chat_history: List[Dict[str, str]] = []
@@ -900,7 +900,7 @@ class CareerPathClient:
         self.chat_history = []
 
 # Usage
-client = CareerPathClient()
+client = Client404ella()
 
 # First question
 result1 = client.ask("How do I prepare for a technical interview?")
@@ -1178,7 +1178,7 @@ print(f"\nSubmitted {sum(1 for r in results if r['success'])}/{len(experiences)}
 
 You can import these endpoints into Postman:
 
-1. **Create a new collection**: "CareerPath API"
+1. **Create a new collection**: "404ella API"
 2. **Set collection variable**: `base_url` = `http://localhost:8000`
 3. **Set collection variable**: `token` = (leave empty, will be set after login)
 
