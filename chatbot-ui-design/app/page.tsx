@@ -354,7 +354,7 @@ export default function CareerCoachChatbot() {
             <div className="text-center space-y-2">
               <div className="flex items-center justify-center gap-3">
                 <h2 className="text-2xl font-semibold text-foreground">
-                  Sarah Mitchell
+                  Ella - Tech Career Advisor
                 </h2>
                 <Button
                   variant="ghost"
@@ -370,10 +370,14 @@ export default function CareerCoachChatbot() {
                   )}
                 </Button>
               </div>
-              <p className="text-muted-foreground">Senior Career Coach</p>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Your AI coach trained on real Reddit discussions and user
-                experiences
+              <p
+                className="text-sm text-muted-foreground leading-relaxed"
+                style={{ maxWidth: "600px" }}
+              >
+                When your career path hits a 404, I help you find it. I've
+                learned from thousands of real developer stories, interviews
+                gone wrong, salary wins, career pivots, and skill upgrades, from
+                Reddit and real users like you.
               </p>
             </div>
 

@@ -15,7 +15,7 @@ interface HeaderProps {
 }
 
 export function Header({
-  title = "CareerPath",
+  title = "404ella",
   showLogo = true,
   showCareerResources = true,
   showLogout = false,

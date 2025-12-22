@@ -330,7 +330,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background">
       <div className="animate-fade-in">
         <Header
-          title="CareerPath Admin"
+          title="404ella Admin"
           showLogout={true}
           onLogout={handleLogout}
           showCareerResources={false}
