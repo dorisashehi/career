@@ -61,3 +61,6 @@ coverage/
 # Misc
 *.log
 .cache/
+
+# Cron job logs
+/backend/logs/

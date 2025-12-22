@@ -1,10 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.services.rag_service import build_rag_chain, ask_question
 from app.services.content_validator import validate_experience
-from pydantic import BaseModel
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from database.db import get_db, SessionLocal, init_db
@@ -72,6 +76,15 @@ app = FastAPI(
     },
 )
 
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security headers middleware (add before CORS)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
@@ -107,8 +120,8 @@ class ChatMessage(BaseModel):
         role: Message role, either "user" or "assistant"
         content: The message content/text
     """
-    role: str
-    content: str
+    role: str = Field(..., description="Message role", pattern="^(user|assistant)$")
+    content: str = Field(..., min_length=1, max_length=10000, description="Message content")
 
 
 class AskRequest(BaseModel):
@@ -163,8 +176,12 @@ class ExperienceRequest(BaseModel):
         category: Experience category (e.g., "interview", "job-search", "career-advice")
         description: Detailed description of the experience (minimum 50 characters)
     """
-    category: str
-    description: str
+    category: str = Field(
+        ...,
+        description="Experience category",
+        pattern="^(interview|job-search|career-advice|salary-negotiation|workplace-issues|career-transition|professional-development|other)$"
+    )
+    description: str = Field(..., min_length=50, max_length=10000, description="Experience description (50-10000 characters)")
 
 
 class ExperienceResponse(BaseModel):
@@ -191,10 +208,10 @@ class AdminRegisterRequest(BaseModel):
         password: Password for the admin account (will be hashed)
         registration_secret: Optional secret key required for registration (if configured)
     """
-    username: str
-    email: str
-    password: str
-    registration_secret: Optional[str] = None
+    username: str = Field(..., min_length=3, max_length=50, description="Username (3-50 characters)")
+    email: EmailStr = Field(..., description="Valid email address")
+    password: str = Field(..., min_length=8, max_length=100, description="Password (minimum 8 characters)")
+    registration_secret: Optional[str] = Field(default=None, max_length=200, description="Registration secret if required")
 
 
 class AdminLoginRequest(BaseModel):
@@ -205,8 +222,8 @@ class AdminLoginRequest(BaseModel):
         username: Admin username
         password: Admin password
     """
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=50, description="Admin username")
+    password: str = Field(..., min_length=1, max_length=100, description="Admin password")
 
 
 class TokenResponse(BaseModel):
@@ -403,7 +420,8 @@ def get_current_admin(
     """,
     response_description="Answer with source citations",
 )
-def ask(payload: AskRequest):
+@limiter.limit("10/minute")  # Rate limit: 10 requests per minute per IP
+def ask(request: Request, payload: AskRequest):
     """
     Ask a question to the career advice chatbot.
 
@@ -460,7 +478,8 @@ def ask(payload: AskRequest):
     After successful registration, returns a JWT token for immediate authentication.
     """,
 )
-def register_admin(payload: AdminRegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")  # Rate limit: 5 registrations per hour per IP
+def register_admin(request: Request, payload: AdminRegisterRequest, db: Session = Depends(get_db)):
     """
     Register a new admin user account.
 
@@ -549,7 +568,8 @@ def register_admin(payload: AdminRegisterRequest, db: Session = Depends(get_db))
     a JWT token that can be stored in memory or localStorage for subsequent requests.
     """,
 )
-def login_admin(payload: AdminLoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")  # Rate limit: 10 login attempts per hour per IP
+def login_admin(request: Request, payload: AdminLoginRequest, db: Session = Depends(get_db)):
     """
     Login as admin user.
 
@@ -646,7 +666,9 @@ class ExperienceListItem(BaseModel):
     summary="Get experiences for admin review",
     description="Retrieve experiences filtered by status. Defaults to 'pending' experiences.",
 )
+@limiter.limit("30/minute")  # Rate limit: 30 requests per minute for authenticated admins
 def get_pending_experiences(
+    request: Request,
     status: str = "pending",
     admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -850,7 +872,9 @@ def reject_experience(
     The experience will be reviewed by an admin before being added to the knowledge base.
     """,
 )
+@limiter.limit("5/minute")  # Rate limit: 5 submissions per minute per IP
 def submit_experience(
+    request: Request,
     experience: ExperienceRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -875,12 +899,8 @@ def submit_experience(
             - 500 for database or unexpected errors
     """
     try:
-        if not experience.category or not experience.description:
-            raise HTTPException(status_code=400, detail="Category and description are required")
-
-        if len(experience.description.strip()) < 50:
-            raise HTTPException(status_code=400, detail="Description must be at least 50 characters")
-
+        # Pydantic validation already ensures category and description are valid
+        # No need for redundant checks here
         category_map = {
             "interview": "interview",
             "job-search": "job_search",
