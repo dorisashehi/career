@@ -1,3 +1,14 @@
+"""
+RAG (Retrieval-Augmented Generation) service for career advice chatbot.
+
+Provides functions to:
+- Load embeddings models for text vectorization
+- Build and configure retrieval chains
+- Query the knowledge base using semantic search
+- Generate answers using LLM with retrieved context
+
+Uses LangChain, HuggingFace embeddings, and PostgreSQL with pgvector.
+"""
 import os
 from typing import List
 from dotenv import load_dotenv
@@ -18,6 +29,12 @@ load_dotenv()
 
 
 def load_embeddings():
+    """
+    Load HuggingFace embeddings model for text vectorization.
+
+    Returns:
+        HuggingFaceEmbeddings instance configured for CPU
+    """
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={'device': 'cpu'},
@@ -26,18 +43,47 @@ def load_embeddings():
 
 
 class PgVectorRetriever(BaseRetriever):
+    """
+    Custom retriever for PostgreSQL vector similarity search.
+
+    Retrieves relevant documents from PostgreSQL using pgvector extension
+    for semantic search based on embeddings. Searches both Reddit posts and
+    approved user experiences, combining results with comments where applicable.
+
+    Attributes:
+        embeddings: Embeddings model for generating query vectors
+        k: Number of documents to retrieve (default: 2)
+        max_content_length: Maximum length of content text in characters (default: 1500)
+        max_comments: Maximum number of comments to include per post (default: 3)
+    """
     embeddings: object = None
-    k: int = 2  # Reduced to 2 to further lower token count
-    max_content_length: int = 1500  # Reduced max characters per document
-    max_comments: int = 3  # Reduced to 3 comments per post
+    k: int = 2
+    max_content_length: int = 1500
+    max_comments: int = 3
     model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, embeddings, k=3):
+        """
+        Initialize retriever with embeddings model.
+
+        Args:
+            embeddings: Embeddings model for generating query vectors
+            k: Number of documents to retrieve (default: 3)
+        """
         super().__init__(embeddings=embeddings, k=k)
         object.__setattr__(self, 'db', SessionLocal())
 
     def _truncate_text(self, text: str, max_length: int) -> str:
-        """Truncate text to max_length, preserving word boundaries."""
+        """
+        Truncate text to max_length, preserving word boundaries.
+
+        Args:
+            text: Text to truncate
+            max_length: Maximum length in characters
+
+        Returns:
+            Truncated text with ellipsis if needed
+        """
         if len(text) <= max_length:
             return text
         # Truncate and add ellipsis
@@ -45,6 +91,15 @@ class PgVectorRetriever(BaseRetriever):
         return truncated + "... [truncated]"
 
     def _get_relevant_documents(self, query: str):
+        """
+        Retrieve relevant documents using vector similarity search.
+
+        Args:
+            query: Search query string
+
+        Returns:
+            List of Document objects with relevant content
+        """
         query_embedding = self.embeddings.embed_query(query)
 
         embedding_list = []
@@ -182,10 +237,26 @@ class PgVectorRetriever(BaseRetriever):
 
 
 def load_retriever(embeddings, k: int = 2):
+    """
+    Load and initialize the PostgreSQL vector retriever.
+
+    Args:
+        embeddings: Embeddings model for generating query vectors
+        k: Number of documents to retrieve (default: 2)
+
+    Returns:
+        PgVectorRetriever instance configured with embeddings and k value
+    """
     return PgVectorRetriever(embeddings, k)
 
 
 def load_llm():
+    """
+    Load the language model for generating responses.
+
+    Returns:
+        ChatGroq instance configured with Llama 3.1 model
+    """
     return ChatGroq(
         model_name="llama-3.1-8b-instant",
         groq_api_key=os.getenv("GROQ_API_KEY"),
@@ -236,6 +307,20 @@ def ask_question(
     question: str,
     chat_history: List = None,
 ):
+    """
+    Ask a question using the RAG chain.
+
+    Processes question with context from retrieved documents and generates
+    answer using LLM. Limits chat history to prevent token overflow.
+
+    Args:
+        rag_chain: LangChain retrieval chain
+        question: User's question string
+        chat_history: Optional list of previous messages
+
+    Returns:
+        Tuple of (answer, updated_chat_history, sources)
+    """
     if chat_history is None:
         chat_history = []
 

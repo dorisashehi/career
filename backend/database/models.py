@@ -1,3 +1,14 @@
+"""
+Database models for CareerPath application.
+
+Defines SQLAlchemy models for:
+- Post: Reddit posts with embeddings
+- Comment: Reddit comments linked to posts
+- UserExperience: User-submitted career experiences
+- AdminUser: Admin account information
+
+All models use pgvector for semantic search capabilities.
+"""
 from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base
 from pgvector.sqlalchemy import Vector
@@ -7,6 +18,12 @@ Base = declarative_base()
 
 
 class Post(Base):
+    """
+    Database model for Reddit posts.
+
+    Stores Reddit post data including title, text, metadata, and vector embeddings
+    for semantic search using pgvector.
+    """
     __tablename__ = "posts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -25,6 +42,12 @@ class Post(Base):
 
 
 class Comment(Base):
+    """
+    Database model for Reddit comments.
+
+    Stores comment data linked to posts via foreign key, including text and
+    vector embeddings for semantic search.
+    """
     __tablename__ = "comments"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -61,6 +84,12 @@ class UserExperience(Base):
 
 
 class AdminUser(Base):
+    """
+    Database model for admin users.
+
+    Stores admin account information including username, email, and hashed password.
+    Used for authentication and authorization of admin endpoints.
+    """
     __tablename__ = "admin_users"
 
     id = Column(Integer, primary_key=True)

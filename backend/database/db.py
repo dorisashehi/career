@@ -1,3 +1,9 @@
+"""
+Database configuration and session management.
+
+Provides database engine, session factory, and initialization functions
+for the CareerPath application using PostgreSQL with pgvector extension.
+"""
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -16,6 +22,15 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
+    """
+    Initialize database tables and extensions.
+
+    Creates the pgvector extension if not already present, then creates all
+    database tables defined in models.py using SQLAlchemy Base metadata.
+
+    Raises:
+        Exception: If pgvector extension cannot be installed or tables cannot be created
+    """
     try:
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -40,6 +55,15 @@ def init_db():
 
 
 def get_db():
+    """
+    Database session dependency for FastAPI.
+
+    Creates a database session, yields it for use in route handlers,
+    and ensures it's closed after the request completes.
+
+    Yields:
+        Database session (SQLAlchemy Session)
+    """
     db = SessionLocal()
     try:
         yield db

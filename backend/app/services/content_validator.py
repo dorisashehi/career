@@ -1,3 +1,14 @@
+"""
+Content validation service for user-submitted experiences.
+
+Provides functions to validate user experiences for:
+- PII (Personally Identifiable Information) detection and redaction
+- Safety checks (toxicity, hate speech, threats, illegal advice)
+- Spam detection
+- Relevance verification
+
+Uses transformers library for ML-based classification.
+"""
 import re
 from datetime import datetime
 from typing import Dict, List
@@ -9,8 +20,13 @@ toxicity_pipeline = None
 relevance_pipeline = None
 
 
-# This function builds simple keyword lists
 def _get_keywords() -> Dict[str, List[str]]:
+    """
+    Get keyword lists for content validation.
+
+    Returns:
+        Dictionary mapping validation categories to keyword lists
+    """
     return {
         "hate": [
             "idiot",
@@ -48,6 +64,14 @@ def _get_keywords() -> Dict[str, List[str]]:
 
 
 def _get_toxicity_pipeline():
+    """
+    Get or create toxicity classification pipeline.
+
+    Uses lazy loading to initialize model only when needed.
+
+    Returns:
+        Transformers pipeline for toxicity classification
+    """
     global toxicity_pipeline
     if toxicity_pipeline is None:
         toxicity_pipeline = pipeline(
@@ -60,6 +84,14 @@ def _get_toxicity_pipeline():
 
 
 def _get_relevance_pipeline():
+    """
+    Get or create relevance classification pipeline.
+
+    Uses lazy loading to initialize model only when needed.
+
+    Returns:
+        Transformers pipeline for zero-shot classification
+    """
     global relevance_pipeline
     if relevance_pipeline is None:
         relevance_pipeline = pipeline(
@@ -70,8 +102,22 @@ def _get_relevance_pipeline():
         )
     return relevance_pipeline
 
-# This function checks for safety and policy problems
 def check_safety(text: str) -> Dict:
+    """
+    Check for safety and policy violations in text.
+
+    Performs keyword-based checks for hate speech, threats, self-harm language,
+    and illegal advice. Also uses a toxicity classification model to detect
+    toxic content.
+
+    Args:
+        text: Text to check for safety issues
+
+    Returns:
+        Dictionary with keys:
+            - is_critical: Boolean indicating if critical issues were found
+            - reasons: List of strings describing why the text was flagged
+    """
     keywords = _get_keywords()
     lowered = text.lower()
 
@@ -124,8 +170,24 @@ def check_safety(text: str) -> Dict:
     }
 
 
-# This function finds and redacts PII like email, phone, urls
 def check_pii(text: str) -> Dict:
+    """
+    Find and redact PII (Personally Identifiable Information) in text.
+
+    Detects and redacts:
+    - Email addresses (replaced with [EMAIL])
+    - Phone numbers (replaced with [PHONE])
+    - URLs (replaced with [URL])
+
+    Args:
+        text: Text to check for PII
+
+    Returns:
+        Dictionary with keys:
+            - cleaned_text: Text with PII redacted
+            - had_pii: Boolean indicating if PII was found
+            - reasons: List of strings describing what PII was found
+    """
     email_pattern = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
     phone_pattern = re.compile(r"\b\+?\d[\d\-\s]{7,}\d\b")
     url_pattern = re.compile(r"(https?://\S+|www\.\S+)")
@@ -186,8 +248,21 @@ def check_spam(text: str) -> Dict:
     }
 
 
-# This function checks if the text is career related or off-topic
 def check_relevance(text: str) -> Dict:
+    """
+    Check if text is career-related or off-topic.
+
+    Uses zero-shot classification to determine if the text is relevant to career topics.
+    Also performs keyword-based checks for career-related terms.
+
+    Args:
+        text: Text to check for career relevance
+
+    Returns:
+        Dictionary with keys:
+            - is_off_topic: Boolean indicating if text is off-topic
+            - reasons: List of strings describing relevance issues
+    """
     # Strip surrounding quotes if the entire text is wrapped in quotes
     # This helps detect quoted examples/resume content
     cleaned_text = text.strip()
@@ -244,8 +319,29 @@ def check_relevance(text: str) -> Dict:
         "reasons": reasons,
     }
 
-# This function runs all checks and builds a final decision
 def validate_experience(text: str) -> Dict:
+    """
+    Run all validation checks on user experience text and build final decision.
+
+    Performs comprehensive validation including:
+    1. PII detection and redaction
+    2. Safety checks (toxicity, hate speech, threats, illegal advice)
+    3. Spam detection
+    4. Relevance verification
+
+    Determines final status (approved/pending) and severity level based on findings.
+
+    Args:
+        text: User experience text to validate
+
+    Returns:
+        Dictionary with keys:
+            - cleaned_text: Text with PII redacted
+            - status: "approved" or "pending"
+            - severity: "critical", "medium", "low", or None
+            - flagged_reason: Combined string of all reasons for flagging (if any)
+            - flagged_at: UTC datetime if flagged, None otherwise
+    """
     now = datetime.utcnow()
 
     pii_result = check_pii(text)

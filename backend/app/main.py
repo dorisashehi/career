@@ -20,7 +20,18 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database tables on startup."""
+    """
+    Initialize database tables on startup.
+
+    Creates all database tables defined in models.py and ensures
+    the pgvector extension is available.
+
+    Args:
+        app: FastAPI application instance
+
+    Yields:
+        None (control returns to FastAPI after initialization)
+    """
     try:
         init_db()
         print("Database tables initialized successfully.")
@@ -30,7 +41,36 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="CareerPath API",
+    description="""
+    Career advice chatbot API with RAG (Retrieval-Augmented Generation) system.
+
+    ## Features
+
+    * **Chat Interface**: Ask career-related questions and get AI-powered answers
+    * **RAG System**: Retrieves relevant information from Reddit posts and user-submitted experiences
+    * **Experience Submission**: Users can submit their career experiences for review
+    * **Admin Panel**: Admin users can review and approve/reject submitted experiences
+    * **Content Validation**: Automatic validation of submitted content for safety, PII, spam, and relevance
+
+    ## Authentication
+
+    Admin endpoints require JWT authentication. Register an admin account using the `/api/admin/register` endpoint
+    with a valid registration secret, then use the returned token in the Authorization header.
+    """,
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+    contact={
+        "name": "CareerPath API Support",
+    },
+    license_info={
+        "name": "MIT",
+    },
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,16 +100,41 @@ security = HTTPBearer()
 # Request / Response Schemas
 # ---------------------------
 class ChatMessage(BaseModel):
+    """
+    Chat message model for conversation history.
+
+    Attributes:
+        role: Message role, either "user" or "assistant"
+        content: The message content/text
+    """
     role: str
     content: str
 
 
 class AskRequest(BaseModel):
+    """
+    Request model for asking questions to the chatbot.
+
+    Attributes:
+        question: The user's question about career advice
+        chat_history: Optional list of previous messages in the conversation
+    """
     question: str
     chat_history: Optional[List[ChatMessage]] = []
 
 
 class Source(BaseModel):
+    """
+    Source information for RAG responses.
+
+    Attributes:
+        url: URL of the source (Reddit post link or None for user experiences)
+        post_id: Unique identifier for the post or experience
+        source: Source type (e.g., "reddit", "user_experience")
+        date: Date when the content was posted/submitted
+        score: Reddit post score (upvotes - downvotes)
+        num_comments: Number of comments on the Reddit post
+    """
     url: str
     post_id: Optional[str] = None
     source: Optional[str] = None
@@ -79,35 +144,79 @@ class Source(BaseModel):
 
 
 class AskResponse(BaseModel):
+    """
+    Response model containing answer and sources.
+
+    Attributes:
+        answer: The AI-generated answer to the user's question
+        sources: List of sources (Reddit posts or user experiences) used to generate the answer
+    """
     answer: str
     sources: List[Source] = []
 
 
 class ExperienceRequest(BaseModel):
+    """
+    Request model for submitting user experiences.
+
+    Attributes:
+        category: Experience category (e.g., "interview", "job-search", "career-advice")
+        description: Detailed description of the experience (minimum 50 characters)
+    """
     category: str
     description: str
 
 
 class ExperienceResponse(BaseModel):
+    """
+    Response model for experience submission.
+
+    Attributes:
+        id: Unique identifier for the submitted experience
+        status: Current status ("pending", "approved", or "rejected")
+        message: Human-readable message about the submission
+    """
     id: int
     status: str
     message: str
 
 
 class AdminRegisterRequest(BaseModel):
+    """
+    Request model for admin registration.
+
+    Attributes:
+        username: Unique username for the admin account
+        email: Unique email address for the admin account
+        password: Password for the admin account (will be hashed)
+        registration_secret: Optional secret key required for registration (if configured)
+    """
     username: str
     email: str
     password: str
-    # Simple shared secret to avoid public self-registration
     registration_secret: Optional[str] = None
 
 
 class AdminLoginRequest(BaseModel):
+    """
+    Request model for admin login.
+
+    Attributes:
+        username: Admin username
+        password: Admin password
+    """
     username: str
     password: str
 
 
 class TokenResponse(BaseModel):
+    """
+    Response model for authentication tokens.
+
+    Attributes:
+        access_token: JWT access token for authenticated requests
+        token_type: Token type, always "bearer"
+    """
     access_token: str
     token_type: str = "bearer"
 
@@ -147,6 +256,15 @@ def run_experience_validation(experience_id: int, original_text: str) -> None:
 # Helpers
 # ---------------------------
 def parse_chat_history(history: List[ChatMessage]):
+    """
+    Convert chat history from API format to LangChain message format.
+
+    Args:
+        history: List of ChatMessage objects
+
+    Returns:
+        List of LangChain HumanMessage and AIMessage objects
+    """
     parsed = []
     for msg in history:
         if msg.role == "user":
@@ -157,7 +275,16 @@ def parse_chat_history(history: List[ChatMessage]):
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against a bcrypt hash."""
+    """
+    Verify a password against a bcrypt hash.
+
+    Args:
+        plain_password: Plain text password to verify
+        hashed_password: Bcrypt hash to compare against
+
+    Returns:
+        True if password matches, False otherwise
+    """
     # Convert string hash to bytes if needed
     if isinstance(hashed_password, str):
         hashed_password = hashed_password.encode('utf-8')
@@ -186,6 +313,16 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token.
+
+    Args:
+        data: Dictionary containing token payload (e.g., user ID)
+        expires_delta: Optional expiration time delta
+
+    Returns:
+        Encoded JWT token string
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -201,10 +338,20 @@ def get_current_admin(
     db: Session = Depends(get_db),
 ) -> AdminUser:
     """
-    Very small helper that:
-    - reads the token from the Authorization header
-    - decodes it
-    - loads the AdminUser from the database using the user ID
+    Get current admin user from JWT token.
+
+    Reads JWT token from Authorization header, decodes it, and retrieves
+    the AdminUser from database.
+
+    Args:
+        credentials: HTTPBearer credentials containing JWT token
+        db: Database session
+
+    Returns:
+        AdminUser object
+
+    Raises:
+        HTTPException: If token is invalid or admin not found
     """
     token = credentials.credentials
     try:
@@ -240,8 +387,38 @@ def get_current_admin(
     return admin
 
 
-@app.post("/ask", response_model=AskResponse)
+@app.post(
+    "/ask",
+    response_model=AskResponse,
+    tags=["Chat"],
+    summary="Ask a question to the chatbot",
+    description="""
+    Ask a question to the career advice chatbot.
+
+    Uses RAG (Retrieval-Augmented Generation) to provide answers based on:
+    - Reddit posts and comments from career-related subreddits
+    - User-submitted experiences that have been approved by admins
+
+    The system retrieves relevant context and generates an AI-powered answer.
+    """,
+    response_description="Answer with source citations",
+)
 def ask(payload: AskRequest):
+    """
+    Ask a question to the career advice chatbot.
+
+    Uses RAG (Retrieval-Augmented Generation) to provide answers based on
+    Reddit posts, comments, and user-submitted experiences.
+
+    Args:
+        payload: AskRequest containing question and optional chat history
+
+    Returns:
+        AskResponse with answer and source citations
+
+    Raises:
+        HTTPException: If request is too large (413) or rate limited
+    """
     try:
         chat_history = parse_chat_history(payload.chat_history)
 
@@ -271,13 +448,37 @@ def ask(payload: AskRequest):
 # Admin Auth Endpoints
 # ---------------------------
 
-@app.post("/api/admin/register", response_model=TokenResponse)
+@app.post(
+    "/api/admin/register",
+    response_model=TokenResponse,
+    tags=["Admin"],
+    summary="Register a new admin account",
+    description="""
+    Register a new admin account.
+
+    This endpoint is protected by a registration secret (if configured via ADMIN_REGISTRATION_SECRET).
+    After successful registration, returns a JWT token for immediate authentication.
+    """,
+)
 def register_admin(payload: AdminRegisterRequest, db: Session = Depends(get_db)):
     """
-    Simple admin registration endpoint.
+    Register a new admin user account.
 
-    We protect this with a shared registration secret so that
-    random users cannot create admin accounts.
+    Creates a new admin account with hashed password. Protected by optional
+    registration secret to prevent unauthorized account creation.
+
+    Args:
+        payload: AdminRegisterRequest with username, email, password, and optional secret
+        db: Database session
+
+    Returns:
+        TokenResponse with JWT access token for immediate authentication
+
+    Raises:
+        HTTPException:
+            - 403 if registration secret is invalid
+            - 400 if username or email already exists
+            - 500 for database or unexpected errors
     """
     try:
         expected_secret = os.getenv("ADMIN_REGISTRATION_SECRET")
@@ -336,13 +537,35 @@ def register_admin(payload: AdminRegisterRequest, db: Session = Depends(get_db))
         ) from e
 
 
-@app.post("/api/admin/login", response_model=TokenResponse)
-def login_admin(payload: AdminLoginRequest, db: Session = Depends(get_db)):
-    """
-    Admin login endpoint.
+@app.post(
+    "/api/admin/login",
+    response_model=TokenResponse,
+    tags=["Admin"],
+    summary="Login as admin user",
+    description="""
+    Authenticate admin credentials and receive JWT token.
 
     The frontend should send username and password, and it will receive
-    a JWT token that it can store (for example) in memory or localStorage.
+    a JWT token that can be stored in memory or localStorage for subsequent requests.
+    """,
+)
+def login_admin(payload: AdminLoginRequest, db: Session = Depends(get_db)):
+    """
+    Login as admin user.
+
+    Authenticates admin credentials and returns JWT token for subsequent requests.
+
+    Args:
+        payload: AdminLoginRequest with username and password
+        db: Database session
+
+    Returns:
+        TokenResponse with JWT access token
+
+    Raises:
+        HTTPException:
+            - 401 if credentials are invalid
+            - 500 for database or unexpected errors
     """
     try:
         admin_user = (
@@ -374,11 +597,27 @@ def login_admin(payload: AdminLoginRequest, db: Session = Depends(get_db)):
         ) from e
 
 
-@app.get("/api/admin/me")
+@app.get(
+    "/api/admin/me",
+    tags=["Admin"],
+    summary="Get current admin information",
+    description="Returns basic information about the authenticated admin user. Requires valid JWT token.",
+)
 def get_current_admin_info(admin: AdminUser = Depends(get_current_admin)):
     """
-    Simple endpoint to test if the admin token is working.
-    Returns basic info about the logged-in admin.
+    Get current admin user information.
+
+    Returns basic information about the authenticated admin user.
+    Requires valid JWT token in Authorization header.
+
+    Args:
+        admin: Current admin user from JWT token (automatically injected)
+
+    Returns:
+        Dictionary with admin id, username, email, and created_at
+
+    Raises:
+        HTTPException: 401 if token is invalid or admin not found
     """
     return {
         "id": admin.id,
@@ -400,7 +639,13 @@ class ExperienceListItem(BaseModel):
     submitted_at: Optional[str]
 
 
-@app.get("/api/admin/experiences", response_model=List[ExperienceListItem])
+@app.get(
+    "/api/admin/experiences",
+    response_model=List[ExperienceListItem],
+    tags=["Admin"],
+    summary="Get experiences for admin review",
+    description="Retrieve experiences filtered by status. Defaults to 'pending' experiences.",
+)
 def get_pending_experiences(
     status: str = "pending",
     admin: AdminUser = Depends(get_current_admin),
@@ -408,7 +653,20 @@ def get_pending_experiences(
 ):
     """
     Get experiences for admin review.
-    By default returns pending experiences, but you can filter by status.
+
+    Retrieves experiences filtered by status. By default returns pending experiences,
+    but can filter by "approved", "rejected", or "pending".
+
+    Args:
+        status: Filter by experience status (default: "pending")
+        admin: Current admin user (automatically injected)
+        db: Database session
+
+    Returns:
+        List of ExperienceListItem objects matching the status filter
+
+    Raises:
+        HTTPException: 500 for database errors
     """
     try:
         experiences = (
@@ -441,14 +699,28 @@ def get_pending_experiences(
         ) from e
 
 
-@app.put("/api/admin/experiences/{experience_id}/approve")
+@app.put("/api/admin/experiences/{experience_id}/approve", tags=["Admin"])
 def approve_experience(
     experience_id: int,
     admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Approve a user experience. Changes status from pending to approved.
+    Approve a user experience.
+
+    Changes experience status from pending to approved and sets approved_at timestamp.
+    Requires admin authentication.
+
+    Args:
+        experience_id: ID of experience to approve
+        admin: Current admin user
+        db: Database session
+
+    Returns:
+        Dictionary with experience id, status, and success message
+
+    Raises:
+        HTTPException: If experience not found
     """
     try:
         # Find the experience in the database
@@ -491,14 +763,35 @@ def approve_experience(
         ) from e
 
 
-@app.put("/api/admin/experiences/{experience_id}/reject")
+@app.put(
+    "/api/admin/experiences/{experience_id}/reject",
+    tags=["Admin"],
+    summary="Reject a user experience",
+    description="Changes experience status from pending to rejected.",
+)
 def reject_experience(
     experience_id: int,
     admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Reject a user experience. Changes status from pending to rejected.
+    Reject a user experience.
+
+    Changes experience status from pending to rejected.
+    Requires admin authentication.
+
+    Args:
+        experience_id: ID of experience to reject
+        admin: Current admin user (automatically injected)
+        db: Database session
+
+    Returns:
+        Dictionary with experience id, status, and success message
+
+    Raises:
+        HTTPException:
+            - 404 if experience not found
+            - 500 for database or unexpected errors
     """
     try:
         # Find the experience in the database
@@ -540,12 +833,47 @@ def reject_experience(
         ) from e
 
 
-@app.post("/api/experiences", response_model=ExperienceResponse)
+@app.post(
+    "/api/experiences",
+    response_model=ExperienceResponse,
+    tags=["Experiences"],
+    summary="Submit a user experience",
+    description="""
+    Submit a user experience for review.
+
+    Creates a new experience entry and triggers background validation including:
+    - PII (Personally Identifiable Information) detection and redaction
+    - Toxicity and safety checks
+    - Spam detection
+    - Relevance verification
+
+    The experience will be reviewed by an admin before being added to the knowledge base.
+    """,
+)
 def submit_experience(
     experience: ExperienceRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    """
+    Submit a user experience for review.
+
+    Creates a new experience entry and triggers background validation
+    (PII detection, toxicity check, spam detection, relevance check).
+
+    Args:
+        experience: ExperienceRequest with category and description
+        background_tasks: FastAPI background tasks for async validation
+        db: Database session
+
+    Returns:
+        ExperienceResponse with experience id, status, and message
+
+    Raises:
+        HTTPException:
+            - 400 if category/description missing or description too short (< 50 chars)
+            - 500 for database or unexpected errors
+    """
     try:
         if not experience.category or not experience.description:
             raise HTTPException(status_code=400, detail="Category and description are required")
