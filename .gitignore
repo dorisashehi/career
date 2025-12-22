@@ -64,3 +64,4 @@ coverage/
 
 # Cron job logs
 /backend/logs/
+documentation

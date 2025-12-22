@@ -1,3 +1,19 @@
+# Backend Flow of RAG
+
+User Question
+↓
+HuggingFace Embedding
+↓
+pgvector similarity search (PostgreSQL)
+↓
+Top Reddit posts + comments
+↓
+Stuffed into prompt
+↓
+Groq LLaMA 3.1
+↓
+Career-focused answer + sources
+
 # Database Setup Guide
 
 This guide explains how to set up and use the PostgreSQL database for storing Reddit data.

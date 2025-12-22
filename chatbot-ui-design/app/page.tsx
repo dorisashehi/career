@@ -288,7 +288,7 @@ export default function CareerCoachChatbot() {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-y-hidden">
+    <div className="min-h-screen bg-background flex flex-col overflow-y-auto">
       <div className="animate-fade-in">
         <Header showCareerResources={true} />
       </div>
