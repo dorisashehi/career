@@ -318,7 +318,7 @@ export default function CareerCoachChatbot() {
                   playsInline
                   preload="auto"
                   className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 border-none ${
-                    isSpeaking ? "opacity-100 scale-110" : "opacity-0 scale-100"
+                    isSpeaking ? "opacity-100 scale-100" : "opacity-0 scale-100"
                   }`}
                   style={{
                     objectPosition: "center",
@@ -335,12 +335,16 @@ export default function CareerCoachChatbot() {
                     }
                   }}
                 />
-                {/* Static image for non-speaking state */}
-                <img
-                  src="/avatar/avatar.png"
-                  alt="Career Coach Avatar"
+                {/* Video for non-speaking state */}
+                <video
+                  src="/avatar/avatar.mp4"
+                  loop
+                  muted
+                  autoPlay
+                  playsInline
+                  preload="auto"
                   className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 border-none ${
-                    isSpeaking ? "opacity-0 scale-110" : "opacity-100 scale-100"
+                    isSpeaking ? "opacity-0 scale-100" : "opacity-100 scale-100"
                   }`}
                   style={{
                     objectPosition: "center",
