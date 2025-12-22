@@ -39,18 +39,26 @@ export function Header({
         <div className="flex items-center gap-3">
           <Menu className="w-5 h-5 md:hidden text-white" />
           {showLogo ? (
-            <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+            >
               <div className="w-8 h-8 bg-white/20 rounded-sm flex items-center justify-center">
                 <Briefcase className="w-5 h-5 text-white" />
               </div>
               <h1 className="text-lg md:text-xl font-semibold text-white">
                 {title}
               </h1>
-            </div>
+            </Link>
           ) : (
-            <h1 className="text-lg md:text-xl font-semibold text-white">
-              {title}
-            </h1>
+            <Link
+              href="/"
+              className="hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <h1 className="text-lg md:text-xl font-semibold text-white">
+                {title}
+              </h1>
+            </Link>
           )}
         </div>
         <div className="flex items-center gap-2 md:gap-4">
