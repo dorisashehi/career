@@ -6,6 +6,16 @@
 
 ---
 
+## 🎥 Video Walkthrough
+
+Watch a demonstration of the platform in action:
+
+<div align="center">
+  <a href="https://youtu.be/zPeHG1xhz14">
+    <img src="https://img.youtube.com/vi/zPeHG1xhz14/maxresdefault.jpg" alt="Video Walkthrough" style="width:100%;max-width:800px;">
+  </a>
+</div>
+
 ## ✨ What Makes 404ella Special?
 
 ### 🤖 **AI-Powered Intelligence**
