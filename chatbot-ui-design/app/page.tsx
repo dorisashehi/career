@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { useRouter } from "next/router";
 import {
   Send,
   Mic,
@@ -49,7 +50,6 @@ export default function CareerCoachChatbot() {
   const { toast } = useToast();
   const [showChat, setShowChat] = useState(false); // Track if chat should be visible
   const videoRef = useRef<HTMLVideoElement>(null);
-
   const {
     isSpeaking,
     isRecording,
@@ -118,6 +118,11 @@ export default function CareerCoachChatbot() {
       speakText(lastMessage.content, lastMessage.id);
     }
   }, [messages, isMuted, speakText, stopSpeaking]);
+
+  // Stop text-to-speech on page reload/mount
+  useEffect(() => {
+    stopSpeaking();
+  }, [stopSpeaking]);
 
   // Preload video on mount
   useEffect(() => {
