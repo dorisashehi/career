@@ -48,7 +48,7 @@ export default function CareerCoachChatbot() {
   >(null);
   const previousMessageCountRef = useRef<number>(0);
   const { toast } = useToast();
-  const [showChat, setShowChat] = useState(false); // Track if chat should be visible
+  const [showChat, setShowChat] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const {
     isSpeaking,
@@ -56,8 +56,10 @@ export default function CareerCoachChatbot() {
     transcript,
     isSpeechSupported,
     isMuted,
+    isLoadingAudio,
     speakText,
     stopSpeaking,
+    preloadAudio,
     handleToggleMute,
     handleStartRecording,
     lastSpokenMessageIdRef,
@@ -65,7 +67,6 @@ export default function CareerCoachChatbot() {
     if (handleSendQuestionRef.current) {
       handleSendQuestionRef.current(text);
     }
-    // Show chat after recording completes
     if (!showChat) {
       setShowChat(true);
     }
@@ -86,7 +87,6 @@ export default function CareerCoachChatbot() {
     if (messages.length > previousMessageCountRef.current) {
       const lastMessage = messages[messages.length - 1];
 
-      // If the last message is from coach, scroll to the beginning of it
       if (lastMessage?.role === "coach") {
         const timeoutId = setTimeout(() => {
           scrollToCoachMessage();
@@ -94,7 +94,6 @@ export default function CareerCoachChatbot() {
         previousMessageCountRef.current = messages.length;
         return () => clearTimeout(timeoutId);
       } else {
-        // For user messages, scroll to bottom
         const timeoutId = setTimeout(() => {
           scrollToBottom();
         }, 100);
@@ -115,30 +114,37 @@ export default function CareerCoachChatbot() {
     ) {
       stopSpeaking(true);
       lastSpokenMessageIdRef.current = lastMessage.id;
+      // If audio was preloaded while muted, speakText will use it
+      // Otherwise, it will load and play
       speakText(lastMessage.content, lastMessage.id);
     }
   }, [messages, isMuted, speakText, stopSpeaking]);
 
-  // Stop text-to-speech on page reload/mount
   useEffect(() => {
     stopSpeaking();
   }, [stopSpeaking]);
 
-  // Preload video on mount
+  // Sync isTyping with isLoadingAudio
+  useEffect(() => {
+    if (isLoadingAudio) {
+      setIsTyping(true);
+    }
+    // When isLoadingAudio becomes false, keep isTyping true (don't auto-stop)
+    // It will be manually stopped when message is shown
+  }, [isLoadingAudio]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
-      video.load(); // Preload the video
+      video.load();
     }
   }, []);
 
-  // Control video playback based on speaking state
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (isSpeaking) {
-      // Ensure video is loaded before playing
       const playVideo = () => {
         video.currentTime = 0;
         const playPromise = video.play();
@@ -149,7 +155,6 @@ export default function CareerCoachChatbot() {
             })
             .catch((error) => {
               console.log("Video play error:", error);
-              // Try again after a short delay
               setTimeout(() => {
                 video.play().catch((e) => console.log("Retry play error:", e));
               }, 100);
@@ -158,16 +163,14 @@ export default function CareerCoachChatbot() {
       };
 
       if (video.readyState >= 2) {
-        // HAVE_CURRENT_DATA or higher - video is ready
         playVideo();
       } else {
-        // Wait for video to be ready
         const handleCanPlay = () => {
           playVideo();
           video.removeEventListener("canplay", handleCanPlay);
         };
         video.addEventListener("canplay", handleCanPlay);
-        video.load(); // Ensure video loads
+        video.load();
 
         return () => {
           video.removeEventListener("canplay", handleCanPlay);
@@ -175,7 +178,7 @@ export default function CareerCoachChatbot() {
       }
     } else {
       video.pause();
-      video.currentTime = 0; // Reset to first frame
+      video.currentTime = 0;
     }
   }, [isSpeaking]);
 
@@ -193,7 +196,6 @@ export default function CareerCoachChatbot() {
 
     stopSpeaking();
 
-    // Show chat when user sends first message
     if (!showChat) {
       setShowChat(true);
     }
@@ -216,8 +218,9 @@ export default function CareerCoachChatbot() {
       const chatHistory = convertMessagesToApiFormat(allMessages);
       const response = await askQuestion(question.trim(), chatHistory);
 
+      const messageId = (Date.now() + 1).toString();
       const coachMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: messageId,
         role: "coach",
         content: response.answer,
         timestamp: new Date().toLocaleTimeString("en-US", {
@@ -227,8 +230,32 @@ export default function CareerCoachChatbot() {
         sources: response.sources || [],
       };
 
+      // Keep typing indicator until audio is ready
+      // Always try to preload audio (even if muted, so it's ready when unmuted)
+      // preloadAudio will handle muted state internally
+      try {
+        // Preload audio - this will set isLoadingAudio to true if not muted
+        // If muted, preloadAudio stores text in pausedRef for later
+        await preloadAudio(response.answer, messageId);
+      } catch (audioError) {
+        // If audio loading fails, log but continue to show message
+        console.error("Audio preload error:", audioError);
+      }
+
+      // Stop typing indicator after preload attempt
       setIsTyping(false);
+
+      // Now show the message - audio is ready to play immediately (or will be when unmuted)
       setMessages((prev) => [...prev, coachMessage]);
+
+      // Start speaking immediately after message is shown (if not muted and audio loaded successfully)
+      if (!isMuted && !coachMessage.isError) {
+        stopSpeaking(true);
+        lastSpokenMessageIdRef.current = messageId;
+        speakText(response.answer, messageId);
+      }
+      // If muted, the text is stored in pausedRef by preloadAudio
+      // When user unmutes, the useEffect will trigger speakText for the latest message
     } catch (error) {
       setIsTyping(false);
 
@@ -331,7 +358,6 @@ export default function CareerCoachChatbot() {
                     outline: "none",
                   }}
                   onLoadedData={() => {
-                    // Video is loaded and ready
                     if (isSpeaking && videoRef.current) {
                       videoRef.current.currentTime = 0;
                       videoRef.current.play().catch((e) => {
@@ -588,7 +614,7 @@ export default function CareerCoachChatbot() {
                     );
                   })}
 
-                  {isTyping && (
+                  {(isTyping || isLoadingAudio) && (
                     <div className="flex items-start animate-fade-in">
                       <div className="bg-muted rounded-2xl px-4 py-3 shadow-sm border border-border/30">
                         <div className="flex gap-1">
