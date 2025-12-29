@@ -3,39 +3,18 @@
 import type React from "react";
 
 import { useState, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { useRouter } from "next/router";
-import {
-  Send,
-  Mic,
-  MicOff,
-  ExternalLink,
-  Calendar,
-  ThumbsUp,
-  MessageSquare,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
 import { Header } from "@/components/header";
-import {
-  askQuestion,
-  type ChatMessage as ApiChatMessage,
-  type Source,
-} from "@/lib/api";
+import { askQuestion, type ChatMessage as ApiChatMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeech } from "@/hooks/use-speech";
-
-type Message = {
-  id: string;
-  role: "user" | "coach";
-  content: string;
-  timestamp: string;
-  sources?: Source[];
-  isError?: boolean;
-};
+import {
+  AvatarSection,
+  ChatMessagesList,
+  ChatInput,
+  QuickActionButtons,
+  type Message,
+} from "@/components/chat";
 
 export default function CareerCoachChatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -54,7 +33,6 @@ export default function CareerCoachChatbot() {
   const messageAudioTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const { toast } = useToast();
   const [showChat, setShowChat] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const {
     isSpeaking,
     isRecording,
@@ -223,67 +201,6 @@ export default function CareerCoachChatbot() {
       setIsTyping(true);
     }
   }, [isLoadingAudio]);
-
-  /**
-   * Loads the avatar video element when the component mounts.
-   * Ensures the video is ready for playback when needed.
-   *
-   * @effect Runs once on component mount
-   */
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      video.load();
-    }
-  }, []);
-
-  /**
-   * Controls avatar video playback based on speaking state.
-   * - When speaking: Plays the speaking animation video from the beginning
-   * - When not speaking: Pauses and resets the video
-   * Handles video loading states and retries on play errors.
-   *
-   * @effect Triggers when isSpeaking state changes
-   */
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (isSpeaking) {
-      const playVideo = () => {
-        video.currentTime = 0;
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {})
-            .catch((error) => {
-              console.log("Video play error:", error);
-              setTimeout(() => {
-                video.play().catch((e) => console.log("Retry play error:", e));
-              }, 100);
-            });
-        }
-      };
-
-      if (video.readyState >= 2) {
-        playVideo();
-      } else {
-        const handleCanPlay = () => {
-          playVideo();
-          video.removeEventListener("canplay", handleCanPlay);
-        };
-        video.addEventListener("canplay", handleCanPlay);
-        video.load();
-
-        return () => {
-          video.removeEventListener("canplay", handleCanPlay);
-        };
-      }
-    } else {
-      video.pause();
-      video.currentTime = 0;
-    }
-  }, [isSpeaking]);
 
   /**
    * Converts internal message format to API-compatible format.
@@ -475,381 +392,39 @@ export default function CareerCoachChatbot() {
           } items-start transition-all duration-700`}
         >
           <div
-            className={`flex flex-col items-center justify-center space-y-6 transition-all duration-700 ${
+            className={`transition-all duration-700 ${
               showChat ? "md:sticky md:top-8" : ""
             }`}
           >
-            <div className="relative">
-              <div className="relative w-64 h-64 md:w-80 md:h-80 overflow-hidden bg-background">
-                <video
-                  ref={videoRef}
-                  src="/avatar/Short_Video_Generation_Request.mp4"
-                  loop
-                  muted
-                  playsInline
-                  preload="auto"
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 border-none ${
-                    isSpeaking ? "opacity-100 scale-100" : "opacity-0 scale-100"
-                  }`}
-                  style={{
-                    objectPosition: "center",
-                    border: "none",
-                    outline: "none",
-                  }}
-                  onLoadedData={() => {
-                    if (isSpeaking && videoRef.current) {
-                      videoRef.current.currentTime = 0;
-                      videoRef.current.play().catch((e) => {
-                        console.log("Video play error:", e);
-                      });
-                    }
-                  }}
-                />
-                <video
-                  src="/avatar/avatar.mp4"
-                  loop
-                  muted
-                  autoPlay
-                  playsInline
-                  preload="auto"
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 border-none ${
-                    isSpeaking ? "opacity-0 scale-100" : "opacity-100 scale-100"
-                  }`}
-                  style={{
-                    objectPosition: "center",
-                    border: "none",
-                    outline: "none",
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="text-center space-y-2">
-              <div className="flex items-center justify-center gap-3">
-                <h2 className="text-2xl font-semibold text-foreground">
-                  Ella - Tech Career Advisor
-                </h2>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleToggleMute}
-                  className="h-8 w-8 rounded-full"
-                  title={isMuted ? "Unmute voice" : "Mute voice"}
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-muted-foreground" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </Button>
-              </div>
-              <p
-                className="text-sm text-muted-foreground leading-relaxed"
-                style={{ maxWidth: "600px" }}
-              >
-                When your career path hits a 404, I help you find it. I've
-                learned from thousands of real developer stories, interviews
-                gone wrong, salary wins, career pivots, and skill upgrades, from
-                Reddit and real users like you.
-              </p>
-            </div>
-
-            <Button
-              onClick={handleStartRecording}
-              disabled={!isSpeechSupported}
-              className={`px-8 py-3 text-base font-medium smooth-hover transition-all duration-200 ${
-                isRecording
-                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-pulse-glow"
-                  : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md hover:scale-105 active:scale-95"
-              }`}
-            >
-              {isRecording ? (
-                <>
-                  <MicOff className="w-5 h-5 mr-2" />
-                  Stop Recording
-                </>
-              ) : (
-                <>
-                  <Mic className="w-5 h-5 mr-2" />
-                  Start Recording
-                </>
-              )}
-            </Button>
-
-            {isRecording && (
-              <div className="flex flex-col items-center gap-2 text-center">
-                <div className="flex items-center gap-2 text-destructive">
-                  <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
-                  <span className="text-sm font-medium">Recording...</span>
-                </div>
-                {transcript && (
-                  <div className="max-w-xs text-sm text-muted-foreground bg-muted px-4 py-2 rounded-lg">
-                    {transcript}
-                  </div>
-                )}
-              </div>
-            )}
+            <AvatarSection
+              isSpeaking={isSpeaking}
+              isRecording={isRecording}
+              transcript={transcript}
+              isSpeechSupported={isSpeechSupported}
+              isMuted={isMuted}
+              onToggleMute={handleToggleMute}
+              onStartRecording={handleStartRecording}
+            />
           </div>
 
           {showChat && (
             <div className="flex flex-col h-[600px] animate-slide-in-right">
               <Card className="flex-1 flex flex-col shadow-xl overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                  {messages.length === 0 && (
-                    <div className="h-full flex items-center justify-center text-muted-foreground text-center p-8">
-                      <p className="text-lg">
-                        Starting your career coaching session...
-                      </p>
-                    </div>
-                  )}
-
-                  {messages.map((message, index) => {
-                    const isLastMessage = index === messages.length - 1;
-                    const shouldHideCoachMessage =
-                      message.role === "coach" &&
-                      isLastMessage &&
-                      isLoadingAudio &&
-                      !forceShowMessages.has(message.id);
-
-                    if (shouldHideCoachMessage) {
-                      return null;
-                    }
-
-                    return (
-                      <div
-                        key={message.id}
-                        ref={isLastMessage ? lastCoachMessageRef : null}
-                        className={`flex flex-col animate-fade-in smooth-hover ${
-                          message.role === "user" ? "items-end" : "items-start"
-                        }`}
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-3 transition-all duration-200 ${
-                            message.role === "user"
-                              ? "bg-primary text-primary-foreground shadow-sm hover:shadow-md"
-                              : "bg-muted text-muted-foreground shadow-sm hover:shadow-md border border-border/30"
-                          }`}
-                        >
-                          {message.role === "coach" && (
-                            <p className="font-semibold text-sm mb-1 text-foreground">
-                              Coach:
-                            </p>
-                          )}
-                          <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                            <ReactMarkdown
-                              components={{
-                                p: ({ children }) => (
-                                  <p className="mb-2 last:mb-0">{children}</p>
-                                ),
-                                strong: ({ children }) => (
-                                  <strong className="font-semibold">
-                                    {children}
-                                  </strong>
-                                ),
-                                ul: ({ children }) => (
-                                  <ul className="list-disc list-inside mb-2 space-y-1">
-                                    {children}
-                                  </ul>
-                                ),
-                                ol: ({ children }) => (
-                                  <ol className="list-decimal list-inside mb-2 space-y-1">
-                                    {children}
-                                  </ol>
-                                ),
-                                li: ({ children }) => (
-                                  <li className="ml-2">{children}</li>
-                                ),
-                              }}
-                            >
-                              {message.content}
-                            </ReactMarkdown>
-                          </div>
-                          {message.role === "coach" &&
-                            message.sources &&
-                            message.sources.length > 0 && (
-                              <div className="mt-3 pt-3 border-t border-border/50">
-                                <p className="text-xs font-semibold text-foreground mb-3">
-                                  Sources:
-                                </p>
-                                <div className="space-y-2">
-                                  {message.sources.map((source, idx) => {
-                                    /**
-                                     * Formats upvote scores for display.
-                                     * Converts large numbers to abbreviated format (e.g., 1500 -> "1.5k").
-                                     *
-                                     * @param score - The upvote score to format
-                                     * @returns Formatted score string or null if score is undefined
-                                     */
-                                    const formatUpvotes = (
-                                      score: number | undefined
-                                    ) => {
-                                      if (!score) return null;
-                                      if (score >= 1000) {
-                                        return `${(score / 1000).toFixed(1)}k`;
-                                      }
-                                      return score.toString();
-                                    };
-
-                                    /**
-                                     * Formats date strings for display in source links.
-                                     * Converts ISO date strings to readable format (e.g., "Jan 15, 2024").
-                                     * Falls back to original string if parsing fails.
-                                     *
-                                     * @param dateStr - ISO date string to format
-                                     * @returns Formatted date string, original string, or null
-                                     */
-                                    const formatDate = (
-                                      dateStr: string | undefined
-                                    ) => {
-                                      if (!dateStr) return null;
-                                      try {
-                                        const date = new Date(dateStr);
-                                        return date.toLocaleDateString(
-                                          "en-US",
-                                          {
-                                            year: "numeric",
-                                            month: "short",
-                                            day: "numeric",
-                                          }
-                                        );
-                                      } catch {
-                                        return dateStr;
-                                      }
-                                    };
-
-                                    return (
-                                      <a
-                                        key={idx}
-                                        href={source.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-start gap-2 p-2 rounded-lg bg-background/50 hover:bg-background/80 border border-border/30 hover:border-primary/50 smooth-hover shadow-sm hover:shadow-md transition-all duration-200 group"
-                                      >
-                                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            {source.source && (
-                                              <span className="text-xs font-medium text-foreground">
-                                                reddit.com/r/{source.source}
-                                              </span>
-                                            )}
-                                            {source.date && (
-                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                <Calendar className="w-3 h-3" />
-                                                <span>
-                                                  {formatDate(source.date)}
-                                                </span>
-                                              </div>
-                                            )}
-                                            {source.score && (
-                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                <ThumbsUp className="w-3 h-3" />
-                                                <span>
-                                                  {formatUpvotes(source.score)}{" "}
-                                                  upvotes
-                                                </span>
-                                              </div>
-                                            )}
-                                            {source.num_comments && (
-                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                <MessageSquare className="w-3 h-3" />
-                                                <span>
-                                                  {source.num_comments} comments
-                                                </span>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </a>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                        </div>
-                        <span className="text-xs text-muted-foreground mt-1 px-2">
-                          {message.timestamp}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  {isLoadingAudio && (
-                    <div className="flex items-start animate-fade-in">
-                      <div className="bg-muted rounded-2xl px-4 py-3 shadow-sm border border-border/30">
-                        <div className="flex gap-1">
-                          <div
-                            className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                            style={{ animationDelay: "0ms" }}
-                          />
-                          <div
-                            className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                            style={{ animationDelay: "150ms" }}
-                          />
-                          <div
-                            className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                            style={{ animationDelay: "300ms" }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </div>
-
-                <div className="border-t border-border p-4 bg-card">
-                  <div className="flex gap-2">
-                    <Input
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="Ask about your career goals..."
-                      className="flex-1 text-base"
-                    />
-                    <Button
-                      onClick={handleSendMessage}
-                      size="icon"
-                      className="bg-primary hover:bg-primary/90"
-                      disabled={!inputValue.trim()}
-                    >
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
+                <ChatMessagesList
+                  messages={messages}
+                  isLoadingAudio={isLoadingAudio}
+                  forceShowMessages={forceShowMessages}
+                  messagesEndRef={messagesEndRef}
+                  lastCoachMessageRef={lastCoachMessageRef}
+                />
+                <ChatInput
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSend={handleSendMessage}
+                  onKeyPress={handleKeyPress}
+                />
               </Card>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setInputValue("How do I negotiate a better salary?")
-                  }
-                  className="border-border/50 hover:border-primary/50 hover:bg-primary/5 smooth-hover shadow-sm hover:shadow-md transition-all duration-200"
-                >
-                  Salary Tips
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setInputValue("I want to change careers")}
-                  className="border-border/50 hover:border-primary/50 hover:bg-primary/5 smooth-hover shadow-sm hover:shadow-md transition-all duration-200"
-                >
-                  Career Change
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setInputValue("Help me prepare for an interview")
-                  }
-                  className="border-border/50 hover:border-primary/50 hover:bg-primary/5 smooth-hover shadow-sm hover:shadow-md transition-all duration-200"
-                >
-                  Interview Prep
-                </Button>
-              </div>
+              <QuickActionButtons onSelect={setInputValue} />
             </div>
           )}
         </div>
