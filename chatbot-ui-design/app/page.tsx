@@ -466,13 +466,22 @@ export default function CareerCoachChatbot() {
                   )}
 
                   {messages.map((message, index) => {
-                    const isLastCoachMessage =
-                      message.role === "coach" && index === messages.length - 1;
+                    const isLastMessage = index === messages.length - 1;
+                    // Hide coach messages if they're the last message and audio is still loading
+                    const shouldHideCoachMessage =
+                      message.role === "coach" &&
+                      isLastMessage &&
+                      isLoadingAudio;
+
+                    // Skip rendering coach messages that should be hidden
+                    if (shouldHideCoachMessage) {
+                      return null;
+                    }
 
                     return (
                       <div
                         key={message.id}
-                        ref={isLastCoachMessage ? lastCoachMessageRef : null}
+                        ref={isLastMessage ? lastCoachMessageRef : null}
                         className={`flex flex-col animate-fade-in smooth-hover ${
                           message.role === "user" ? "items-end" : "items-start"
                         }`}
@@ -614,7 +623,7 @@ export default function CareerCoachChatbot() {
                     );
                   })}
 
-                  {(isTyping || isLoadingAudio) && (
+                  {isLoadingAudio && (
                     <div className="flex items-start animate-fade-in">
                       <div className="bg-muted rounded-2xl px-4 py-3 shadow-sm border border-border/30">
                         <div className="flex gap-1">
