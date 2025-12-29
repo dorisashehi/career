@@ -41,12 +41,17 @@ export default function CareerCoachChatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [forceShowMessages, setForceShowMessages] = useState<Set<string>>(
+    new Set()
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastCoachMessageRef = useRef<HTMLDivElement>(null);
   const handleSendQuestionRef = useRef<
     ((question: string) => Promise<void>) | null
   >(null);
   const previousMessageCountRef = useRef<number>(0);
+  const previousLoadingAudioRef = useRef<boolean>(false);
+  const messageAudioTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const { toast } = useToast();
   const [showChat, setShowChat] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -72,10 +77,18 @@ export default function CareerCoachChatbot() {
     }
   });
 
+  /**
+   * Scrolls the chat container to the bottom of the messages list.
+   * Uses smooth scrolling behavior for a better user experience.
+   */
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  /**
+   * Scrolls the chat container to the last coach message.
+   * Positions the message at the start of the viewport for better visibility.
+   */
   const scrollToCoachMessage = () => {
     lastCoachMessageRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -83,26 +96,81 @@ export default function CareerCoachChatbot() {
     });
   };
 
+  /**
+   * Handles automatic scrolling when new messages are added.
+   * - User messages: Scrolls to bottom immediately since they're always visible
+   * - Coach messages: Scrolls to loader if audio is loading, or to message if already visible
+   *
+   * @effect Triggers when messages.length or isLoadingAudio changes
+   */
   useEffect(() => {
     if (messages.length > previousMessageCountRef.current) {
       const lastMessage = messages[messages.length - 1];
 
-      if (lastMessage?.role === "coach") {
-        const timeoutId = setTimeout(() => {
-          scrollToCoachMessage();
-        }, 100);
-        previousMessageCountRef.current = messages.length;
-        return () => clearTimeout(timeoutId);
-      } else {
+      if (lastMessage?.role === "user") {
         const timeoutId = setTimeout(() => {
           scrollToBottom();
         }, 100);
         previousMessageCountRef.current = messages.length;
         return () => clearTimeout(timeoutId);
+      } else if (lastMessage?.role === "coach") {
+        const timeoutId = setTimeout(() => {
+          if (isLoadingAudio) {
+            scrollToBottom();
+          } else {
+            scrollToCoachMessage();
+          }
+        }, 100);
+        previousMessageCountRef.current = messages.length;
+        return () => clearTimeout(timeoutId);
       }
     }
-  }, [messages.length]);
+  }, [messages.length, isLoadingAudio]);
 
+  /**
+   * Scrolls to coach message when it becomes visible after audio loading completes.
+   * Only triggers when isLoadingAudio transitions from true to false.
+   * Also cleans up any pending timeout for the message since it's now visible.
+   *
+   * @effect Triggers when isLoadingAudio or messages change
+   */
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (
+      lastMessage?.role === "coach" &&
+      previousLoadingAudioRef.current === true &&
+      !isLoadingAudio
+    ) {
+      const timeoutId = setTimeout(() => {
+        scrollToCoachMessage();
+      }, 150);
+
+      if (
+        lastMessage.id &&
+        messageAudioTimeoutRef.current.has(lastMessage.id)
+      ) {
+        const pendingTimeout = messageAudioTimeoutRef.current.get(
+          lastMessage.id
+        );
+        if (pendingTimeout) {
+          clearTimeout(pendingTimeout);
+          messageAudioTimeoutRef.current.delete(lastMessage.id);
+        }
+      }
+
+      previousLoadingAudioRef.current = isLoadingAudio;
+      return () => clearTimeout(timeoutId);
+    }
+    previousLoadingAudioRef.current = isLoadingAudio;
+  }, [isLoadingAudio, messages]);
+
+  /**
+   * Automatically speaks coach messages when they appear and user is not muted.
+   * Prevents re-speaking the same message by checking lastSpokenMessageIdRef.
+   * Skips error messages and respects the mute state.
+   *
+   * @effect Triggers when messages, isMuted, speakText, or stopSpeaking change
+   */
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
 
@@ -114,25 +182,54 @@ export default function CareerCoachChatbot() {
     ) {
       stopSpeaking(true);
       lastSpokenMessageIdRef.current = lastMessage.id;
-      // If audio was preloaded while muted, speakText will use it
-      // Otherwise, it will load and play
       speakText(lastMessage.content, lastMessage.id);
     }
   }, [messages, isMuted, speakText, stopSpeaking]);
 
+  /**
+   * Stops any ongoing speech when the component unmounts.
+   * Ensures audio doesn't continue playing after the user navigates away.
+   *
+   * @effect Runs on component unmount
+   */
   useEffect(() => {
     stopSpeaking();
   }, [stopSpeaking]);
 
-  // Sync isTyping with isLoadingAudio
+  /**
+   * Cleans up all pending audio timeout references when component unmounts.
+   * Prevents memory leaks by clearing all scheduled timeouts.
+   *
+   * @effect Runs on component unmount
+   */
+  useEffect(() => {
+    return () => {
+      messageAudioTimeoutRef.current.forEach((timeout) => {
+        clearTimeout(timeout);
+      });
+      messageAudioTimeoutRef.current.clear();
+    };
+  }, []);
+
+  /**
+   * Synchronizes the typing indicator with audio loading state.
+   * Shows typing indicator when audio is loading.
+   * Note: Doesn't auto-hide when loading completes - that's handled manually when message is shown.
+   *
+   * @effect Triggers when isLoadingAudio changes
+   */
   useEffect(() => {
     if (isLoadingAudio) {
       setIsTyping(true);
     }
-    // When isLoadingAudio becomes false, keep isTyping true (don't auto-stop)
-    // It will be manually stopped when message is shown
   }, [isLoadingAudio]);
 
+  /**
+   * Loads the avatar video element when the component mounts.
+   * Ensures the video is ready for playback when needed.
+   *
+   * @effect Runs once on component mount
+   */
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
@@ -140,6 +237,14 @@ export default function CareerCoachChatbot() {
     }
   }, []);
 
+  /**
+   * Controls avatar video playback based on speaking state.
+   * - When speaking: Plays the speaking animation video from the beginning
+   * - When not speaking: Pauses and resets the video
+   * Handles video loading states and retries on play errors.
+   *
+   * @effect Triggers when isSpeaking state changes
+   */
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -150,9 +255,7 @@ export default function CareerCoachChatbot() {
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise
-            .then(() => {
-              // Video is playing
-            })
+            .then(() => {})
             .catch((error) => {
               console.log("Video play error:", error);
               setTimeout(() => {
@@ -182,6 +285,13 @@ export default function CareerCoachChatbot() {
     }
   }, [isSpeaking]);
 
+  /**
+   * Converts internal message format to API-compatible format.
+   * Filters out messages with id "1" and maps role names (coach -> assistant).
+   *
+   * @param msgs - Array of internal Message objects
+   * @returns Array of ApiChatMessage objects ready for API submission
+   */
   const convertMessagesToApiFormat = (msgs: Message[]): ApiChatMessage[] => {
     const messagesToSend = msgs.filter((msg) => msg.id !== "1");
 
@@ -191,6 +301,18 @@ export default function CareerCoachChatbot() {
     }));
   };
 
+  /**
+   * Handles sending a user question to the API and processing the coach's response.
+   * - Creates and displays user message immediately
+   * - Sends question to API with chat history
+   * - Preloads audio for the coach's response
+   * - Displays coach message (hidden until audio loads or fails)
+   * - Handles errors gracefully with user-friendly messages
+   * - Sets up timeout fallback to ensure message shows even if audio is slow
+   *
+   * @param question - The user's question text
+   * @throws Logs errors and shows toast notifications, but doesn't throw
+   */
   const handleSendQuestion = async (question: string) => {
     if (!question.trim()) return;
 
@@ -230,32 +352,28 @@ export default function CareerCoachChatbot() {
         sources: response.sources || [],
       };
 
-      // Keep typing indicator until audio is ready
-      // Always try to preload audio (even if muted, so it's ready when unmuted)
-      // preloadAudio will handle muted state internally
       try {
-        // Preload audio - this will set isLoadingAudio to true if not muted
-        // If muted, preloadAudio stores text in pausedRef for later
         await preloadAudio(response.answer, messageId);
       } catch (audioError) {
-        // If audio loading fails, log but continue to show message
         console.error("Audio preload error:", audioError);
+        setForceShowMessages((prev) => new Set(prev).add(messageId));
       }
 
-      // Stop typing indicator after preload attempt
       setIsTyping(false);
 
-      // Now show the message - audio is ready to play immediately (or will be when unmuted)
       setMessages((prev) => [...prev, coachMessage]);
 
-      // Start speaking immediately after message is shown (if not muted and audio loaded successfully)
+      const timeoutId = setTimeout(() => {
+        setForceShowMessages((prev) => new Set(prev).add(messageId));
+        messageAudioTimeoutRef.current.delete(messageId);
+      }, 5000);
+      messageAudioTimeoutRef.current.set(messageId, timeoutId);
+
       if (!isMuted && !coachMessage.isError) {
         stopSpeaking(true);
         lastSpokenMessageIdRef.current = messageId;
         speakText(response.answer, messageId);
       }
-      // If muted, the text is stored in pausedRef by preloadAudio
-      // When user unmutes, the useEffect will trigger speakText for the latest message
     } catch (error) {
       setIsTyping(false);
 
@@ -298,20 +416,42 @@ export default function CareerCoachChatbot() {
 
   const handleSendQuestionStable = useRef(handleSendQuestion);
 
+  /**
+   * Keeps the stable ref updated with the latest handleSendQuestion function.
+   * This allows the speech hook callback to always use the current function.
+   *
+   * @effect Runs on every render to keep ref in sync
+   */
   useEffect(() => {
     handleSendQuestionStable.current = handleSendQuestion;
   });
 
+  /**
+   * Sets up the handleSendQuestionRef for the speech hook callback.
+   * This enables voice transcription to trigger question sending.
+   *
+   * @effect Runs once on component mount
+   */
   useEffect(() => {
     handleSendQuestionRef.current = handleSendQuestionStable.current;
   }, []);
 
+  /**
+   * Handles sending a message from the input field.
+   * Validates that the input is not empty, sends the question, and clears the input.
+   */
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
     handleSendQuestion(inputValue);
     setInputValue("");
   };
 
+  /**
+   * Handles keyboard input in the message input field.
+   * Sends message on Enter key press (but allows Shift+Enter for new lines).
+   *
+   * @param e - Keyboard event from the input element
+   */
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -341,7 +481,6 @@ export default function CareerCoachChatbot() {
           >
             <div className="relative">
               <div className="relative w-64 h-64 md:w-80 md:h-80 overflow-hidden bg-background">
-                {/* Video for speaking state */}
                 <video
                   ref={videoRef}
                   src="/avatar/Short_Video_Generation_Request.mp4"
@@ -366,7 +505,6 @@ export default function CareerCoachChatbot() {
                     }
                   }}
                 />
-                {/* Video for non-speaking state */}
                 <video
                   src="/avatar/avatar.mp4"
                   loop
@@ -467,13 +605,12 @@ export default function CareerCoachChatbot() {
 
                   {messages.map((message, index) => {
                     const isLastMessage = index === messages.length - 1;
-                    // Hide coach messages if they're the last message and audio is still loading
                     const shouldHideCoachMessage =
                       message.role === "coach" &&
                       isLastMessage &&
-                      isLoadingAudio;
+                      isLoadingAudio &&
+                      !forceShowMessages.has(message.id);
 
-                    // Skip rendering coach messages that should be hidden
                     if (shouldHideCoachMessage) {
                       return null;
                     }
@@ -537,6 +674,13 @@ export default function CareerCoachChatbot() {
                                 </p>
                                 <div className="space-y-2">
                                   {message.sources.map((source, idx) => {
+                                    /**
+                                     * Formats upvote scores for display.
+                                     * Converts large numbers to abbreviated format (e.g., 1500 -> "1.5k").
+                                     *
+                                     * @param score - The upvote score to format
+                                     * @returns Formatted score string or null if score is undefined
+                                     */
                                     const formatUpvotes = (
                                       score: number | undefined
                                     ) => {
@@ -547,6 +691,14 @@ export default function CareerCoachChatbot() {
                                       return score.toString();
                                     };
 
+                                    /**
+                                     * Formats date strings for display in source links.
+                                     * Converts ISO date strings to readable format (e.g., "Jan 15, 2024").
+                                     * Falls back to original string if parsing fails.
+                                     *
+                                     * @param dateStr - ISO date string to format
+                                     * @returns Formatted date string, original string, or null
+                                     */
                                     const formatDate = (
                                       dateStr: string | undefined
                                     ) => {
